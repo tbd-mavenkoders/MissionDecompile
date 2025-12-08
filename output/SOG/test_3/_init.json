@@ -1,0 +1,105 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101000", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101004", 
+          "ops": [
+            "RSP", 
+            "0x8"
+          ], 
+          "proto": "SUB RSP,0x8", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "00101008", 
+          "ops": [
+            "RAX", 
+            "00103fe8"
+          ], 
+          "proto": "MOV RAX,qword ptr [0x00103fe8]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010100f", 
+          "ops": [
+            "RAX", 
+            "RAX"
+          ], 
+          "proto": "TEST RAX,RAX", 
+          "mnemonic": "TEST"
+        }, 
+        {
+          "address": "00101012", 
+          "ops": [
+            "00101016"
+          ], 
+          "proto": "JZ 0x00101016", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "00101000", 
+      "id": "B0"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101014", 
+          "ops": [
+            "RAX"
+          ], 
+          "proto": "CALL RAX", 
+          "mnemonic": "CALL"
+        }
+      ], 
+      "start": "00101014", 
+      "id": "B1"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101016", 
+          "ops": [
+            "RSP", 
+            "0x8"
+          ], 
+          "proto": "ADD RSP,0x8", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "0010101a", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "00101016", 
+      "id": "B2"
+    }
+  ], 
+  "edges": [
+    {
+      "dst": "B2", 
+      "src": "B0", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B1", 
+      "src": "B0", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B2", 
+      "src": "B1", 
+      "type": "FALL_THROUGH"
+    }
+  ], 
+  "entry": "00101000", 
+  "function_name": "_init"
+}

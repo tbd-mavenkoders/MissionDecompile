@@ -1,0 +1,29 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101020", 
+          "ops": [
+            "00103fb8"
+          ], 
+          "proto": "PUSH qword ptr [0x00103fb8]", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101026", 
+          "ops": [
+            "00103fc0"
+          ], 
+          "proto": "JMP qword ptr [0x00103fc0]", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "00101020", 
+      "id": "B0"
+    }
+  ], 
+  "edges": [], 
+  "entry": "00101020", 
+  "function_name": "FUN_00101020"
+}

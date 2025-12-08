@@ -1,0 +1,27 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101160", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101164", 
+          "ops": [
+            "001010e0"
+          ], 
+          "proto": "JMP 0x001010e0", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "00101160", 
+      "id": "B0"
+    }
+  ], 
+  "edges": [], 
+  "entry": "00101160", 
+  "function_name": "frame_dummy"
+}

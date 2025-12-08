@@ -1,0 +1,16 @@
+digraph CallGraph {
+{register_tm_clones} -> {_ITM_registerTMCloneTable};
+{_init} -> {__gmon_start__};
+{_start} -> {__libc_start_main};
+{_start} -> {main};
+{main} -> {knapsack};
+{main} -> {printf};
+{main} -> {__stack_chk_fail};
+{deregister_tm_clones} -> {_ITM_deregisterTMCloneTable};
+{__do_global_dtors_aux} -> {FUN_00101050};
+{__do_global_dtors_aux} -> {deregister_tm_clones};
+{knapsack} -> {max};
+{knapsack} -> {__stack_chk_fail};
+{FUN_00101050} -> {__cxa_finalize};
+{frame_dummy} -> {register_tm_clones};
+}

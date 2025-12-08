@@ -1,0 +1,2303 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101184", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101188", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "PUSH RBP", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101189", 
+          "ops": [
+            "RBP", 
+            "RSP"
+          ], 
+          "proto": "MOV RBP,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010118c", 
+          "ops": [
+            "R13"
+          ], 
+          "proto": "PUSH R13", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "0010118e", 
+          "ops": [
+            "R12"
+          ], 
+          "proto": "PUSH R12", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101190", 
+          "ops": [
+            "RBX"
+          ], 
+          "proto": "PUSH RBX", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101191", 
+          "ops": [
+            "RSP", 
+            "0x58"
+          ], 
+          "proto": "SUB RSP,0x58", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "00101195", 
+          "ops": [
+            "RBP", 
+            "-0x54", 
+            "EDI"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x54],EDI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101198", 
+          "ops": [
+            "RBP", 
+            "-0x60", 
+            "RSI"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x60],RSI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010119c", 
+          "ops": [
+            "RBP", 
+            "-0x68", 
+            "RDX"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x68],RDX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011a0", 
+          "ops": [
+            "RBP", 
+            "-0x58", 
+            "ECX"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x58],ECX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011a3", 
+          "ops": [
+            "RAX", 
+            "FS", 
+            "0x28"
+          ], 
+          "proto": "MOV RAX,qword ptr FS:[0x28]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011ac", 
+          "ops": [
+            "RBP", 
+            "-0x28", 
+            "RAX"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x28],RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011b0", 
+          "ops": [
+            "EAX", 
+            "EAX"
+          ], 
+          "proto": "XOR EAX,EAX", 
+          "mnemonic": "XOR"
+        }, 
+        {
+          "address": "001011b2", 
+          "ops": [
+            "RAX", 
+            "RSP"
+          ], 
+          "proto": "MOV RAX,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011b5", 
+          "ops": [
+            "R13", 
+            "RAX"
+          ], 
+          "proto": "MOV R13,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011b8", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x54"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x54]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011bb", 
+          "ops": [
+            "ECX", 
+            "RAX", 
+            "0x1"
+          ], 
+          "proto": "LEA ECX,[RAX + 0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001011be", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x58"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x58]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011c1", 
+          "ops": [
+            "R8D", 
+            "RAX", 
+            "0x1"
+          ], 
+          "proto": "LEA R8D,[RAX + 0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001011c5", 
+          "ops": [
+            "RAX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RAX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001011c8", 
+          "ops": [
+            "RAX", 
+            "0x1"
+          ], 
+          "proto": "SUB RAX,0x1", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001011cc", 
+          "ops": [
+            "RBP", 
+            "-0x40", 
+            "RAX"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x40],RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011d0", 
+          "ops": [
+            "RAX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RAX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001011d3", 
+          "ops": [
+            "RBX", 
+            "RAX", 
+            "0x4"
+          ], 
+          "proto": "LEA RBX,[RAX*0x4]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001011db", 
+          "ops": [
+            "RAX", 
+            "R8D"
+          ], 
+          "proto": "MOVSXD RAX,R8D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001011de", 
+          "ops": [
+            "RAX", 
+            "0x1"
+          ], 
+          "proto": "SUB RAX,0x1", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001011e2", 
+          "ops": [
+            "RBP", 
+            "-0x38", 
+            "RAX"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x38],RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011e6", 
+          "ops": [
+            "RAX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RAX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001011e9", 
+          "ops": [
+            "RSI", 
+            "RAX"
+          ], 
+          "proto": "MOV RSI,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011ec", 
+          "ops": [
+            "EDI", 
+            "0x0"
+          ], 
+          "proto": "MOV EDI,0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011f1", 
+          "ops": [
+            "RAX", 
+            "R8D"
+          ], 
+          "proto": "MOVSXD RAX,R8D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001011f4", 
+          "ops": [
+            "RAX", 
+            "RAX"
+          ], 
+          "proto": "MOV RAX,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011f7", 
+          "ops": [
+            "EDX", 
+            "0x0"
+          ], 
+          "proto": "MOV EDX,0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011fc", 
+          "ops": [
+            "R10", 
+            "RDI"
+          ], 
+          "proto": "MOV R10,RDI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001011ff", 
+          "ops": [
+            "R10", 
+            "RAX"
+          ], 
+          "proto": "IMUL R10,RAX", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101203", 
+          "ops": [
+            "R9", 
+            "RDX"
+          ], 
+          "proto": "MOV R9,RDX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101206", 
+          "ops": [
+            "R9", 
+            "RSI"
+          ], 
+          "proto": "IMUL R9,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "0010120a", 
+          "ops": [
+            "R9", 
+            "R10"
+          ], 
+          "proto": "ADD R9,R10", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "0010120d", 
+          "ops": [
+            "RSI"
+          ], 
+          "proto": "MUL RSI", 
+          "mnemonic": "MUL"
+        }, 
+        {
+          "address": "00101210", 
+          "ops": [
+            "RSI", 
+            "R9", 
+            "RDX", 
+            "0x1"
+          ], 
+          "proto": "LEA RSI,[R9 + RDX*0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101214", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "MOV RDX,RSI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101217", 
+          "ops": [
+            "RAX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RAX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010121a", 
+          "ops": [
+            "RSI", 
+            "RAX"
+          ], 
+          "proto": "MOV RSI,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010121d", 
+          "ops": [
+            "EDI", 
+            "0x0"
+          ], 
+          "proto": "MOV EDI,0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101222", 
+          "ops": [
+            "RAX", 
+            "R8D"
+          ], 
+          "proto": "MOVSXD RAX,R8D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101225", 
+          "ops": [
+            "RAX", 
+            "RAX"
+          ], 
+          "proto": "MOV RAX,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101228", 
+          "ops": [
+            "EDX", 
+            "0x0"
+          ], 
+          "proto": "MOV EDX,0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010122d", 
+          "ops": [
+            "R10", 
+            "RDI"
+          ], 
+          "proto": "MOV R10,RDI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101230", 
+          "ops": [
+            "R10", 
+            "RAX"
+          ], 
+          "proto": "IMUL R10,RAX", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101234", 
+          "ops": [
+            "R9", 
+            "RDX"
+          ], 
+          "proto": "MOV R9,RDX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101237", 
+          "ops": [
+            "R9", 
+            "RSI"
+          ], 
+          "proto": "IMUL R9,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "0010123b", 
+          "ops": [
+            "R9", 
+            "R10"
+          ], 
+          "proto": "ADD R9,R10", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "0010123e", 
+          "ops": [
+            "RSI"
+          ], 
+          "proto": "MUL RSI", 
+          "mnemonic": "MUL"
+        }, 
+        {
+          "address": "00101241", 
+          "ops": [
+            "RSI", 
+            "R9", 
+            "RDX", 
+            "0x1"
+          ], 
+          "proto": "LEA RSI,[R9 + RDX*0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101245", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "MOV RDX,RSI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101248", 
+          "ops": [
+            "RDX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RDX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010124b", 
+          "ops": [
+            "RAX", 
+            "R8D"
+          ], 
+          "proto": "MOVSXD RAX,R8D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010124e", 
+          "ops": [
+            "RAX", 
+            "RDX"
+          ], 
+          "proto": "IMUL RAX,RDX", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101252", 
+          "ops": [
+            "RDX", 
+            "RAX", 
+            "0x4"
+          ], 
+          "proto": "LEA RDX,[RAX*0x4]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "0010125a", 
+          "ops": [
+            "EAX", 
+            "0x10"
+          ], 
+          "proto": "MOV EAX,0x10", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010125f", 
+          "ops": [
+            "RAX", 
+            "0x1"
+          ], 
+          "proto": "SUB RAX,0x1", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "00101263", 
+          "ops": [
+            "RAX", 
+            "RDX"
+          ], 
+          "proto": "ADD RAX,RDX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101266", 
+          "ops": [
+            "EDI", 
+            "0x10"
+          ], 
+          "proto": "MOV EDI,0x10", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010126b", 
+          "ops": [
+            "EDX", 
+            "0x0"
+          ], 
+          "proto": "MOV EDX,0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101270", 
+          "ops": [
+            "RDI"
+          ], 
+          "proto": "DIV RDI", 
+          "mnemonic": "DIV"
+        }, 
+        {
+          "address": "00101273", 
+          "ops": [
+            "RAX", 
+            "RAX", 
+            "0x10"
+          ], 
+          "proto": "IMUL RAX,RAX,0x10", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101277", 
+          "ops": [
+            "RCX", 
+            "RAX"
+          ], 
+          "proto": "MOV RCX,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010127a", 
+          "ops": [
+            "RCX", 
+            "-0x1000"
+          ], 
+          "proto": "AND RCX,-0x1000", 
+          "mnemonic": "AND"
+        }, 
+        {
+          "address": "00101281", 
+          "ops": [
+            "RDX", 
+            "RSP"
+          ], 
+          "proto": "MOV RDX,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101284", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "SUB RDX,RCX", 
+          "mnemonic": "SUB"
+        }
+      ], 
+      "start": "00101184", 
+      "id": "B0"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101287", 
+          "ops": [
+            "RSP", 
+            "RDX"
+          ], 
+          "proto": "CMP RSP,RDX", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "0010128a", 
+          "ops": [
+            "0010129e"
+          ], 
+          "proto": "JZ 0x0010129e", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "00101287", 
+      "id": "B1"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "0010128c", 
+          "ops": [
+            "RSP", 
+            "0x1000"
+          ], 
+          "proto": "SUB RSP,0x1000", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "00101293", 
+          "ops": [
+            "RSP", 
+            "0xff8", 
+            "0x0"
+          ], 
+          "proto": "OR qword ptr [RSP + 0xff8],0x0", 
+          "mnemonic": "OR"
+        }, 
+        {
+          "address": "0010129c", 
+          "ops": [
+            "00101287"
+          ], 
+          "proto": "JMP 0x00101287", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "0010128c", 
+      "id": "B2"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "0010129e", 
+          "ops": [
+            "RDX", 
+            "RAX"
+          ], 
+          "proto": "MOV RDX,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012a1", 
+          "ops": [
+            "EDX", 
+            "0xfff"
+          ], 
+          "proto": "AND EDX,0xfff", 
+          "mnemonic": "AND"
+        }, 
+        {
+          "address": "001012a7", 
+          "ops": [
+            "RSP", 
+            "RDX"
+          ], 
+          "proto": "SUB RSP,RDX", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001012aa", 
+          "ops": [
+            "RDX", 
+            "RAX"
+          ], 
+          "proto": "MOV RDX,RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012ad", 
+          "ops": [
+            "EDX", 
+            "0xfff"
+          ], 
+          "proto": "AND EDX,0xfff", 
+          "mnemonic": "AND"
+        }, 
+        {
+          "address": "001012b3", 
+          "ops": [
+            "RDX", 
+            "RDX"
+          ], 
+          "proto": "TEST RDX,RDX", 
+          "mnemonic": "TEST"
+        }, 
+        {
+          "address": "001012b6", 
+          "ops": [
+            "001012c8"
+          ], 
+          "proto": "JZ 0x001012c8", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "0010129e", 
+      "id": "B3"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012b8", 
+          "ops": [
+            "EAX", 
+            "0xfff"
+          ], 
+          "proto": "AND EAX,0xfff", 
+          "mnemonic": "AND"
+        }, 
+        {
+          "address": "001012bd", 
+          "ops": [
+            "RAX", 
+            "0x8"
+          ], 
+          "proto": "SUB RAX,0x8", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001012c1", 
+          "ops": [
+            "RAX", 
+            "RSP"
+          ], 
+          "proto": "ADD RAX,RSP", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001012c4", 
+          "ops": [
+            "RAX", 
+            "0x0"
+          ], 
+          "proto": "OR qword ptr [RAX],0x0", 
+          "mnemonic": "OR"
+        }
+      ], 
+      "start": "001012b8", 
+      "id": "B4"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012c8", 
+          "ops": [
+            "RAX", 
+            "RSP"
+          ], 
+          "proto": "MOV RAX,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012cb", 
+          "ops": [
+            "RAX", 
+            "0x3"
+          ], 
+          "proto": "ADD RAX,0x3", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001012cf", 
+          "ops": [
+            "RAX", 
+            "0x2"
+          ], 
+          "proto": "SHR RAX,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "001012d3", 
+          "ops": [
+            "RAX", 
+            "0x2"
+          ], 
+          "proto": "SHL RAX,0x2", 
+          "mnemonic": "SHL"
+        }, 
+        {
+          "address": "001012d7", 
+          "ops": [
+            "RBP", 
+            "-0x30", 
+            "RAX"
+          ], 
+          "proto": "MOV qword ptr [RBP + -0x30],RAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012db", 
+          "ops": [
+            "RBP", 
+            "-0x48", 
+            "0x0"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x48],0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012e2", 
+          "ops": [
+            "00101449"
+          ], 
+          "proto": "JMP 0x00101449", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "001012c8", 
+      "id": "B5"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012e7", 
+          "ops": [
+            "RBP", 
+            "-0x44", 
+            "0x0"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x44],0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001012ee", 
+          "ops": [
+            "00101439"
+          ], 
+          "proto": "JMP 0x00101439", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "001012e7", 
+      "id": "B6"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012f3", 
+          "ops": [
+            "RBP", 
+            "-0x48", 
+            "0x0"
+          ], 
+          "proto": "CMP dword ptr [RBP + -0x48],0x0", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "001012f7", 
+          "ops": [
+            "001012ff"
+          ], 
+          "proto": "JZ 0x001012ff", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "001012f3", 
+      "id": "B7"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012f9", 
+          "ops": [
+            "RBP", 
+            "-0x44", 
+            "0x0"
+          ], 
+          "proto": "CMP dword ptr [RBP + -0x44],0x0", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "001012fd", 
+          "ops": [
+            "00101329"
+          ], 
+          "proto": "JNZ 0x00101329", 
+          "mnemonic": "JNZ"
+        }
+      ], 
+      "start": "001012f9", 
+      "id": "B8"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001012ff", 
+          "ops": [
+            "RSI", 
+            "RBX"
+          ], 
+          "proto": "MOV RSI,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101302", 
+          "ops": [
+            "RSI", 
+            "0x2"
+          ], 
+          "proto": "SHR RSI,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "00101306", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010130a", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010130d", 
+          "ops": [
+            "RCX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RCX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101310", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101313", 
+          "ops": [
+            "RDX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RDX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101316", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "IMUL RDX,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "0010131a", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "0010131d", 
+          "ops": [
+            "RAX", 
+            "RDX", 
+            "0x4", 
+            "0x0"
+          ], 
+          "proto": "MOV dword ptr [RAX + RDX*0x4],0x0", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101324", 
+          "ops": [
+            "00101435"
+          ], 
+          "proto": "JMP 0x00101435", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "001012ff", 
+      "id": "B9"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101329", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010132c", 
+          "ops": [], 
+          "proto": "CDQE", 
+          "mnemonic": "CDQE"
+        }, 
+        {
+          "address": "0010132e", 
+          "ops": [
+            "RAX", 
+            "0x2"
+          ], 
+          "proto": "SHL RAX,0x2", 
+          "mnemonic": "SHL"
+        }, 
+        {
+          "address": "00101332", 
+          "ops": [
+            "RDX", 
+            "RAX", 
+            "-0x4"
+          ], 
+          "proto": "LEA RDX,[RAX + -0x4]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101336", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x60"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x60]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010133a", 
+          "ops": [
+            "RAX", 
+            "RDX"
+          ], 
+          "proto": "ADD RAX,RDX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "0010133d", 
+          "ops": [
+            "EAX", 
+            "RAX"
+          ], 
+          "proto": "MOV EAX,dword ptr [RAX]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010133f", 
+          "ops": [
+            "RBP", 
+            "-0x44", 
+            "EAX"
+          ], 
+          "proto": "CMP dword ptr [RBP + -0x44],EAX", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "00101342", 
+          "ops": [
+            "001013ef"
+          ], 
+          "proto": "JL 0x001013ef", 
+          "mnemonic": "JL"
+        }
+      ], 
+      "start": "00101329", 
+      "id": "B10"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101348", 
+          "ops": [
+            "RSI", 
+            "RBX"
+          ], 
+          "proto": "MOV RSI,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010134b", 
+          "ops": [
+            "RSI", 
+            "0x2"
+          ], 
+          "proto": "SHR RSI,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "0010134f", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101352", 
+          "ops": [
+            "EDI", 
+            "RAX", 
+            "-0x1"
+          ], 
+          "proto": "LEA EDI,[RAX + -0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101355", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101359", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010135c", 
+          "ops": [
+            "RCX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RCX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010135f", 
+          "ops": [
+            "RDX", 
+            "EDI"
+          ], 
+          "proto": "MOVSXD RDX,EDI", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101362", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "IMUL RDX,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101366", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101369", 
+          "ops": [
+            "EAX", 
+            "RAX", 
+            "RDX", 
+            "0x4"
+          ], 
+          "proto": "MOV EAX,dword ptr [RAX + RDX*0x4]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010136c", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010136f", 
+          "ops": [
+            "RDX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RDX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101372", 
+          "ops": [
+            "RDX", 
+            "0x2"
+          ], 
+          "proto": "SHL RDX,0x2", 
+          "mnemonic": "SHL"
+        }, 
+        {
+          "address": "00101376", 
+          "ops": [
+            "RCX", 
+            "RDX", 
+            "-0x4"
+          ], 
+          "proto": "LEA RCX,[RDX + -0x4]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "0010137a", 
+          "ops": [
+            "RDX", 
+            "RBP", 
+            "-0x68"
+          ], 
+          "proto": "MOV RDX,qword ptr [RBP + -0x68]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010137e", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101381", 
+          "ops": [
+            "ESI", 
+            "RDX"
+          ], 
+          "proto": "MOV ESI,dword ptr [RDX]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101383", 
+          "ops": [
+            "R8", 
+            "RBX"
+          ], 
+          "proto": "MOV R8,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101386", 
+          "ops": [
+            "R8", 
+            "0x2"
+          ], 
+          "proto": "SHR R8,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "0010138a", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010138d", 
+          "ops": [
+            "R9D", 
+            "RDX", 
+            "-0x1"
+          ], 
+          "proto": "LEA R9D,[RDX + -0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101391", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101394", 
+          "ops": [
+            "RDX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RDX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101397", 
+          "ops": [
+            "RDX", 
+            "0x2"
+          ], 
+          "proto": "SHL RDX,0x2", 
+          "mnemonic": "SHL"
+        }, 
+        {
+          "address": "0010139b", 
+          "ops": [
+            "RCX", 
+            "RDX", 
+            "-0x4"
+          ], 
+          "proto": "LEA RCX,[RDX + -0x4]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "0010139f", 
+          "ops": [
+            "RDX", 
+            "RBP", 
+            "-0x60"
+          ], 
+          "proto": "MOV RDX,qword ptr [RBP + -0x60]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013a3", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001013a6", 
+          "ops": [
+            "EDX", 
+            "RDX"
+          ], 
+          "proto": "MOV EDX,dword ptr [RDX]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013a8", 
+          "ops": [
+            "ECX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV ECX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013ab", 
+          "ops": [
+            "ECX", 
+            "EDX"
+          ], 
+          "proto": "SUB ECX,EDX", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001013ad", 
+          "ops": [
+            "RDX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RDX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013b1", 
+          "ops": [
+            "RDI", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RDI,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001013b4", 
+          "ops": [
+            "RCX", 
+            "R9D"
+          ], 
+          "proto": "MOVSXD RCX,R9D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001013b7", 
+          "ops": [
+            "RCX", 
+            "R8"
+          ], 
+          "proto": "IMUL RCX,R8", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "001013bb", 
+          "ops": [
+            "RCX", 
+            "RDI"
+          ], 
+          "proto": "ADD RCX,RDI", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001013be", 
+          "ops": [
+            "EDX", 
+            "RDX", 
+            "RCX", 
+            "0x4"
+          ], 
+          "proto": "MOV EDX,dword ptr [RDX + RCX*0x4]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013c1", 
+          "ops": [
+            "EDX", 
+            "ESI"
+          ], 
+          "proto": "ADD EDX,ESI", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001013c3", 
+          "ops": [
+            "R12", 
+            "RBX"
+          ], 
+          "proto": "MOV R12,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013c6", 
+          "ops": [
+            "R12", 
+            "0x2"
+          ], 
+          "proto": "SHR R12,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "001013ca", 
+          "ops": [
+            "ESI", 
+            "EAX"
+          ], 
+          "proto": "MOV ESI,EAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013cc", 
+          "ops": [
+            "EDI", 
+            "EDX"
+          ], 
+          "proto": "MOV EDI,EDX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013ce", 
+          "ops": [
+            "00101169"
+          ], 
+          "proto": "CALL 0x00101169", 
+          "mnemonic": "CALL"
+        }, 
+        {
+          "address": "001013d3", 
+          "ops": [
+            "RDX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RDX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013d7", 
+          "ops": [
+            "ECX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV ECX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013da", 
+          "ops": [
+            "RSI", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RSI,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001013dd", 
+          "ops": [
+            "ECX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV ECX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013e0", 
+          "ops": [
+            "RCX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RCX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "001013e3", 
+          "ops": [
+            "RCX", 
+            "R12"
+          ], 
+          "proto": "IMUL RCX,R12", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "001013e7", 
+          "ops": [
+            "RCX", 
+            "RSI"
+          ], 
+          "proto": "ADD RCX,RSI", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001013ea", 
+          "ops": [
+            "RDX", 
+            "RCX", 
+            "0x4", 
+            "EAX"
+          ], 
+          "proto": "MOV dword ptr [RDX + RCX*0x4],EAX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013ed", 
+          "ops": [
+            "00101435"
+          ], 
+          "proto": "JMP 0x00101435", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "00101348", 
+      "id": "B11"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001013ef", 
+          "ops": [
+            "RSI", 
+            "RBX"
+          ], 
+          "proto": "MOV RSI,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013f2", 
+          "ops": [
+            "RSI", 
+            "0x2"
+          ], 
+          "proto": "SHR RSI,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "001013f6", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001013f9", 
+          "ops": [
+            "R8D", 
+            "RAX", 
+            "-0x1"
+          ], 
+          "proto": "LEA R8D,[RAX + -0x1]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001013fd", 
+          "ops": [
+            "RDI", 
+            "RBX"
+          ], 
+          "proto": "MOV RDI,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101400", 
+          "ops": [
+            "RDI", 
+            "0x2"
+          ], 
+          "proto": "SHR RDI,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "00101404", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101408", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010140b", 
+          "ops": [
+            "RCX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RCX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010140e", 
+          "ops": [
+            "RDX", 
+            "R8D"
+          ], 
+          "proto": "MOVSXD RDX,R8D", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101411", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "IMUL RDX,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101415", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101418", 
+          "ops": [
+            "EDX", 
+            "RAX", 
+            "RDX", 
+            "0x4"
+          ], 
+          "proto": "MOV EDX,dword ptr [RAX + RDX*0x4]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010141b", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010141f", 
+          "ops": [
+            "ECX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV ECX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101422", 
+          "ops": [
+            "RSI", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RSI,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101425", 
+          "ops": [
+            "ECX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV ECX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101428", 
+          "ops": [
+            "RCX", 
+            "ECX"
+          ], 
+          "proto": "MOVSXD RCX,ECX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010142b", 
+          "ops": [
+            "RCX", 
+            "RDI"
+          ], 
+          "proto": "IMUL RCX,RDI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "0010142f", 
+          "ops": [
+            "RCX", 
+            "RSI"
+          ], 
+          "proto": "ADD RCX,RSI", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101432", 
+          "ops": [
+            "RAX", 
+            "RCX", 
+            "0x4", 
+            "EDX"
+          ], 
+          "proto": "MOV dword ptr [RAX + RCX*0x4],EDX", 
+          "mnemonic": "MOV"
+        }
+      ], 
+      "start": "001013ef", 
+      "id": "B12"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101435", 
+          "ops": [
+            "RBP", 
+            "-0x44", 
+            "0x1"
+          ], 
+          "proto": "ADD dword ptr [RBP + -0x44],0x1", 
+          "mnemonic": "ADD"
+        }
+      ], 
+      "start": "00101435", 
+      "id": "B13"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101439", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x44"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x44]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010143c", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x54"
+          ], 
+          "proto": "CMP EAX,dword ptr [RBP + -0x54]", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "0010143f", 
+          "ops": [
+            "001012f3"
+          ], 
+          "proto": "JLE 0x001012f3", 
+          "mnemonic": "JLE"
+        }
+      ], 
+      "start": "00101439", 
+      "id": "B14"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101445", 
+          "ops": [
+            "RBP", 
+            "-0x48", 
+            "0x1"
+          ], 
+          "proto": "ADD dword ptr [RBP + -0x48],0x1", 
+          "mnemonic": "ADD"
+        }
+      ], 
+      "start": "00101445", 
+      "id": "B15"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101449", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x48"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x48]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010144c", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x58"
+          ], 
+          "proto": "CMP EAX,dword ptr [RBP + -0x58]", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "0010144f", 
+          "ops": [
+            "001012e7"
+          ], 
+          "proto": "JLE 0x001012e7", 
+          "mnemonic": "JLE"
+        }
+      ], 
+      "start": "00101449", 
+      "id": "B16"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101455", 
+          "ops": [
+            "RBX", 
+            "0x2"
+          ], 
+          "proto": "SHR RBX,0x2", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "00101459", 
+          "ops": [
+            "RSI", 
+            "RBX"
+          ], 
+          "proto": "MOV RSI,RBX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010145c", 
+          "ops": [
+            "RAX", 
+            "RBP", 
+            "-0x30"
+          ], 
+          "proto": "MOV RAX,qword ptr [RBP + -0x30]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101460", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x54"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x54]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101463", 
+          "ops": [
+            "RCX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RCX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "00101466", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x58"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x58]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101469", 
+          "ops": [
+            "RDX", 
+            "EDX"
+          ], 
+          "proto": "MOVSXD RDX,EDX", 
+          "mnemonic": "MOVSXD"
+        }, 
+        {
+          "address": "0010146c", 
+          "ops": [
+            "RDX", 
+            "RSI"
+          ], 
+          "proto": "IMUL RDX,RSI", 
+          "mnemonic": "IMUL"
+        }, 
+        {
+          "address": "00101470", 
+          "ops": [
+            "RDX", 
+            "RCX"
+          ], 
+          "proto": "ADD RDX,RCX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "00101473", 
+          "ops": [
+            "EAX", 
+            "RAX", 
+            "RDX", 
+            "0x4"
+          ], 
+          "proto": "MOV EAX,dword ptr [RAX + RDX*0x4]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101476", 
+          "ops": [
+            "RSP", 
+            "R13"
+          ], 
+          "proto": "MOV RSP,R13", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101479", 
+          "ops": [
+            "RDX", 
+            "RBP", 
+            "-0x28"
+          ], 
+          "proto": "MOV RDX,qword ptr [RBP + -0x28]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010147d", 
+          "ops": [
+            "RDX", 
+            "FS", 
+            "0x28"
+          ], 
+          "proto": "SUB RDX,qword ptr FS:[0x28]", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "00101486", 
+          "ops": [
+            "0010148d"
+          ], 
+          "proto": "JZ 0x0010148d", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "00101455", 
+      "id": "B17"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101488", 
+          "ops": [
+            "00101060"
+          ], 
+          "proto": "CALL 0x00101060", 
+          "mnemonic": "CALL"
+        }
+      ], 
+      "start": "00101488", 
+      "id": "B18"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "0010148d", 
+          "ops": [
+            "RSP", 
+            "RBP", 
+            "-0x18"
+          ], 
+          "proto": "LEA RSP,[RBP + -0x18]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "00101491", 
+          "ops": [
+            "RBX"
+          ], 
+          "proto": "POP RBX", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101492", 
+          "ops": [
+            "R12"
+          ], 
+          "proto": "POP R12", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101494", 
+          "ops": [
+            "R13"
+          ], 
+          "proto": "POP R13", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101496", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "POP RBP", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101497", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "0010148d", 
+      "id": "B19"
+    }
+  ], 
+  "edges": [
+    {
+      "dst": "B1", 
+      "src": "B0", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B3", 
+      "src": "B1", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B2", 
+      "src": "B1", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B1", 
+      "src": "B2", 
+      "type": "UNCONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B5", 
+      "src": "B3", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B4", 
+      "src": "B3", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B5", 
+      "src": "B4", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B16", 
+      "src": "B5", 
+      "type": "UNCONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B14", 
+      "src": "B6", 
+      "type": "UNCONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B9", 
+      "src": "B7", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B8", 
+      "src": "B7", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B10", 
+      "src": "B8", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B9", 
+      "src": "B8", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B13", 
+      "src": "B9", 
+      "type": "UNCONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B12", 
+      "src": "B10", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B11", 
+      "src": "B10", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B13", 
+      "src": "B11", 
+      "type": "UNCONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B13", 
+      "src": "B12", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B14", 
+      "src": "B13", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B7", 
+      "src": "B14", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B15", 
+      "src": "B14", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B16", 
+      "src": "B15", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B6", 
+      "src": "B16", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B17", 
+      "src": "B16", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B19", 
+      "src": "B17", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B18", 
+      "src": "B17", 
+      "type": "FALL_THROUGH"
+    }
+  ], 
+  "entry": "00101184", 
+  "function_name": "knapsack"
+}

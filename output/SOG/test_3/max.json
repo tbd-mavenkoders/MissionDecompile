@@ -1,0 +1,108 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101169", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "0010116d", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "PUSH RBP", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "0010116e", 
+          "ops": [
+            "RBP", 
+            "RSP"
+          ], 
+          "proto": "MOV RBP,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101171", 
+          "ops": [
+            "RBP", 
+            "-0x4", 
+            "EDI"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x4],EDI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101174", 
+          "ops": [
+            "RBP", 
+            "-0x8", 
+            "ESI"
+          ], 
+          "proto": "MOV dword ptr [RBP + -0x8],ESI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101177", 
+          "ops": [
+            "EDX", 
+            "RBP", 
+            "-0x8"
+          ], 
+          "proto": "MOV EDX,dword ptr [RBP + -0x8]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010117a", 
+          "ops": [
+            "EAX", 
+            "RBP", 
+            "-0x4"
+          ], 
+          "proto": "MOV EAX,dword ptr [RBP + -0x4]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010117d", 
+          "ops": [
+            "EDX", 
+            "EAX"
+          ], 
+          "proto": "CMP EDX,EAX", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "0010117f", 
+          "ops": [
+            "EAX", 
+            "EDX"
+          ], 
+          "proto": "CMOVGE EAX,EDX", 
+          "mnemonic": "CMOVGE"
+        }, 
+        {
+          "address": "00101182", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "POP RBP", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101183", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "00101169", 
+      "id": "B0"
+    }
+  ], 
+  "edges": [], 
+  "entry": "00101169", 
+  "function_name": "max"
+}

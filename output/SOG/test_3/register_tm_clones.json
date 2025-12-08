@@ -1,0 +1,172 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "001010e0", 
+          "ops": [
+            "RDI", 
+            "0x104010"
+          ], 
+          "proto": "LEA RDI,[0x104010]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001010e7", 
+          "ops": [
+            "RSI", 
+            "0x104010"
+          ], 
+          "proto": "LEA RSI,[0x104010]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001010ee", 
+          "ops": [
+            "RSI", 
+            "RDI"
+          ], 
+          "proto": "SUB RSI,RDI", 
+          "mnemonic": "SUB"
+        }, 
+        {
+          "address": "001010f1", 
+          "ops": [
+            "RAX", 
+            "RSI"
+          ], 
+          "proto": "MOV RAX,RSI", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001010f4", 
+          "ops": [
+            "RSI", 
+            "0x3f"
+          ], 
+          "proto": "SHR RSI,0x3f", 
+          "mnemonic": "SHR"
+        }, 
+        {
+          "address": "001010f8", 
+          "ops": [
+            "RAX", 
+            "0x3"
+          ], 
+          "proto": "SAR RAX,0x3", 
+          "mnemonic": "SAR"
+        }, 
+        {
+          "address": "001010fc", 
+          "ops": [
+            "RSI", 
+            "RAX"
+          ], 
+          "proto": "ADD RSI,RAX", 
+          "mnemonic": "ADD"
+        }, 
+        {
+          "address": "001010ff", 
+          "ops": [
+            "RSI", 
+            "0x1"
+          ], 
+          "proto": "SAR RSI,0x1", 
+          "mnemonic": "SAR"
+        }, 
+        {
+          "address": "00101102", 
+          "ops": [
+            "00101118"
+          ], 
+          "proto": "JZ 0x00101118", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "001010e0", 
+      "id": "B0"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101104", 
+          "ops": [
+            "RAX", 
+            "00103ff0"
+          ], 
+          "proto": "MOV RAX,qword ptr [0x00103ff0]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010110b", 
+          "ops": [
+            "RAX", 
+            "RAX"
+          ], 
+          "proto": "TEST RAX,RAX", 
+          "mnemonic": "TEST"
+        }, 
+        {
+          "address": "0010110e", 
+          "ops": [
+            "00101118"
+          ], 
+          "proto": "JZ 0x00101118", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "00101104", 
+      "id": "B1"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101110", 
+          "ops": [
+            "RAX"
+          ], 
+          "proto": "JMP RAX", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "00101110", 
+      "id": "B2"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101118", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "00101118", 
+      "id": "B3"
+    }
+  ], 
+  "edges": [
+    {
+      "dst": "B3", 
+      "src": "B0", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B1", 
+      "src": "B0", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B3", 
+      "src": "B1", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B2", 
+      "src": "B1", 
+      "type": "FALL_THROUGH"
+    }
+  ], 
+  "entry": "001010e0", 
+  "function_name": "register_tm_clones"
+}

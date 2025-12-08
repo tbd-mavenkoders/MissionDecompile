@@ -1,0 +1,120 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101080", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101084", 
+          "ops": [
+            "EBP", 
+            "EBP"
+          ], 
+          "proto": "XOR EBP,EBP", 
+          "mnemonic": "XOR"
+        }, 
+        {
+          "address": "00101086", 
+          "ops": [
+            "R9", 
+            "RDX"
+          ], 
+          "proto": "MOV R9,RDX", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101089", 
+          "ops": [
+            "RSI"
+          ], 
+          "proto": "POP RSI", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "0010108a", 
+          "ops": [
+            "RDX", 
+            "RSP"
+          ], 
+          "proto": "MOV RDX,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "0010108d", 
+          "ops": [
+            "RSP", 
+            "-0x10"
+          ], 
+          "proto": "AND RSP,-0x10", 
+          "mnemonic": "AND"
+        }, 
+        {
+          "address": "00101091", 
+          "ops": [
+            "RAX"
+          ], 
+          "proto": "PUSH RAX", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101092", 
+          "ops": [
+            "RSP"
+          ], 
+          "proto": "PUSH RSP", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "00101093", 
+          "ops": [
+            "R8D", 
+            "R8D"
+          ], 
+          "proto": "XOR R8D,R8D", 
+          "mnemonic": "XOR"
+        }, 
+        {
+          "address": "00101096", 
+          "ops": [
+            "ECX", 
+            "ECX"
+          ], 
+          "proto": "XOR ECX,ECX", 
+          "mnemonic": "XOR"
+        }, 
+        {
+          "address": "00101098", 
+          "ops": [
+            "RDI", 
+            "0x101498"
+          ], 
+          "proto": "LEA RDI,[0x101498]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "0010109f", 
+          "ops": [
+            "00103fd8"
+          ], 
+          "proto": "CALL qword ptr [0x00103fd8]", 
+          "mnemonic": "CALL"
+        }, 
+        {
+          "address": "001010a5", 
+          "ops": [], 
+          "proto": "HLT", 
+          "mnemonic": "HLT"
+        }
+      ], 
+      "start": "00101080", 
+      "id": "B0"
+    }
+  ], 
+  "edges": [], 
+  "entry": "00101080", 
+  "function_name": "_start"
+}

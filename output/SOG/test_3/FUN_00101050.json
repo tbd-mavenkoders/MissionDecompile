@@ -1,0 +1,27 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101050", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101054", 
+          "ops": [
+            "00103ff8"
+          ], 
+          "proto": "JMP qword ptr [0x00103ff8]", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "00101050", 
+      "id": "B0"
+    }
+  ], 
+  "edges": [], 
+  "entry": "00101050", 
+  "function_name": "FUN_00101050"
+}

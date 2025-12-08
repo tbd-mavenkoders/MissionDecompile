@@ -1,0 +1,174 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "00101120", 
+          "ops": [], 
+          "proto": "ENDBR64", 
+          "mnemonic": "ENDBR64"
+        }, 
+        {
+          "address": "00101124", 
+          "ops": [
+            "00104010", 
+            "0x0"
+          ], 
+          "proto": "CMP byte ptr [0x00104010],0x0", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "0010112b", 
+          "ops": [
+            "00101158"
+          ], 
+          "proto": "JNZ 0x00101158", 
+          "mnemonic": "JNZ"
+        }
+      ], 
+      "start": "00101120", 
+      "id": "B0"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "0010112d", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "PUSH RBP", 
+          "mnemonic": "PUSH"
+        }, 
+        {
+          "address": "0010112e", 
+          "ops": [
+            "00103ff8", 
+            "0x0"
+          ], 
+          "proto": "CMP qword ptr [0x00103ff8],0x0", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "00101136", 
+          "ops": [
+            "RBP", 
+            "RSP"
+          ], 
+          "proto": "MOV RBP,RSP", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101139", 
+          "ops": [
+            "00101147"
+          ], 
+          "proto": "JZ 0x00101147", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "0010112d", 
+      "id": "B1"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "0010113b", 
+          "ops": [
+            "RDI", 
+            "00104008"
+          ], 
+          "proto": "MOV RDI,qword ptr [0x00104008]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101142", 
+          "ops": [
+            "00101050"
+          ], 
+          "proto": "CALL 0x00101050", 
+          "mnemonic": "CALL"
+        }
+      ], 
+      "start": "0010113b", 
+      "id": "B2"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101147", 
+          "ops": [
+            "001010b0"
+          ], 
+          "proto": "CALL 0x001010b0", 
+          "mnemonic": "CALL"
+        }, 
+        {
+          "address": "0010114c", 
+          "ops": [
+            "00104010", 
+            "0x1"
+          ], 
+          "proto": "MOV byte ptr [0x00104010],0x1", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "00101153", 
+          "ops": [
+            "RBP"
+          ], 
+          "proto": "POP RBP", 
+          "mnemonic": "POP"
+        }, 
+        {
+          "address": "00101154", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "00101147", 
+      "id": "B3"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "00101158", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "00101158", 
+      "id": "B4"
+    }
+  ], 
+  "edges": [
+    {
+      "dst": "B4", 
+      "src": "B0", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B1", 
+      "src": "B0", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B3", 
+      "src": "B1", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B2", 
+      "src": "B1", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B3", 
+      "src": "B2", 
+      "type": "FALL_THROUGH"
+    }
+  ], 
+  "entry": "00101120", 
+  "function_name": "__do_global_dtors_aux"
+}

@@ -1,0 +1,127 @@
+{
+  "blocks": [
+    {
+      "instructions": [
+        {
+          "address": "001010b0", 
+          "ops": [
+            "RDI", 
+            "0x104010"
+          ], 
+          "proto": "LEA RDI,[0x104010]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001010b7", 
+          "ops": [
+            "RAX", 
+            "0x104010"
+          ], 
+          "proto": "LEA RAX,[0x104010]", 
+          "mnemonic": "LEA"
+        }, 
+        {
+          "address": "001010be", 
+          "ops": [
+            "RAX", 
+            "RDI"
+          ], 
+          "proto": "CMP RAX,RDI", 
+          "mnemonic": "CMP"
+        }, 
+        {
+          "address": "001010c1", 
+          "ops": [
+            "001010d8"
+          ], 
+          "proto": "JZ 0x001010d8", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "001010b0", 
+      "id": "B0"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001010c3", 
+          "ops": [
+            "RAX", 
+            "00103fe0"
+          ], 
+          "proto": "MOV RAX,qword ptr [0x00103fe0]", 
+          "mnemonic": "MOV"
+        }, 
+        {
+          "address": "001010ca", 
+          "ops": [
+            "RAX", 
+            "RAX"
+          ], 
+          "proto": "TEST RAX,RAX", 
+          "mnemonic": "TEST"
+        }, 
+        {
+          "address": "001010cd", 
+          "ops": [
+            "001010d8"
+          ], 
+          "proto": "JZ 0x001010d8", 
+          "mnemonic": "JZ"
+        }
+      ], 
+      "start": "001010c3", 
+      "id": "B1"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001010cf", 
+          "ops": [
+            "RAX"
+          ], 
+          "proto": "JMP RAX", 
+          "mnemonic": "JMP"
+        }
+      ], 
+      "start": "001010cf", 
+      "id": "B2"
+    }, 
+    {
+      "instructions": [
+        {
+          "address": "001010d8", 
+          "ops": [], 
+          "proto": "RET", 
+          "mnemonic": "RET"
+        }
+      ], 
+      "start": "001010d8", 
+      "id": "B3"
+    }
+  ], 
+  "edges": [
+    {
+      "dst": "B3", 
+      "src": "B0", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B1", 
+      "src": "B0", 
+      "type": "FALL_THROUGH"
+    }, 
+    {
+      "dst": "B3", 
+      "src": "B1", 
+      "type": "CONDITIONAL_JUMP"
+    }, 
+    {
+      "dst": "B2", 
+      "src": "B1", 
+      "type": "FALL_THROUGH"
+    }
+  ], 
+  "entry": "001010b0", 
+  "function_name": "deregister_tm_clones"
+}
