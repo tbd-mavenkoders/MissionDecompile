@@ -30,37 +30,25 @@ def get_sog_json(executable_name: str, function_name: str) -> Path:
     sog_dir = get_sog_dir(executable_name)
     return sog_dir / f"{function_name}.json"
   
+def get_call_graph_path(executable_name: str) -> Path:
+    sog_dir = get_sog_dir(executable_name)
+    return sog_dir / "call_graph.dot"
+  
+def get_topsort(call_graph_path: Path) -> List[str]:
+    call_graph = build_call_graph(call_graph_path)
+    sorted_functions = topological_sort(call_graph)
+    return sorted_functions
+  
+  
 '''
 JSON Format for Storing Entire Function
 {
   f_name: str,
-  sog: {
-    "blocks": [
-      {
-        "id": str,
-        "instructions": [
-          {
-            "address": str,
-            "mnemonic": str,
-            "operands": List[str]
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "src": str,
-        "dst": str,
-        "type": str
-      }
-    ]
-    "entry": str
-    "function_name": str
-  }
+  sog: Dict
+  asm: str
   ghidra_pseudo: str
   summary: str
-  optimization_status: bool
-  optimized_code: str
+  optimization_level: OptimizationLevel
 }
  
 TODO:
@@ -73,36 +61,6 @@ TODO:
 0.5 - Run Static Repair on the optimized program
 '''
 
-def enrich_function_data(executable_path: str, function_name: str):
-  executable_name = Path(executable_path).name
-  function_data = {}
-  
-  # Load SOG JSON
-  sog_json_path = get_sog_json(executable_name, function_name)
-  with open(sog_json_path, "r") as fp:
-    sog_data = json.load(fp)
-    
-  # Load Ghidra Pseudocode
-  g = Ghidra()
-  success, ghidra_output = g.convert_executable_to_ghidra(
-  
-  
-  
-
-
-def combine_into_json(executable_path: str):
-  executable_name = Path(executable_path).name
-  call_graph_path = get_sog_dir(executable_name) / "call_graph.dot"
-  ordered_functions = topological_sort(build_call_graph(call_graph_path))
-  
-  data = {}
-  data["program_name"] = executable_name
-  data["top_sort"] = ordered_functions
-  data["functions"] = []
-  for func_name in ordered_functions:
-    enrich_function_data(executable_name, func_name)
-    
-    
     
     
   
