@@ -105,9 +105,9 @@ class Ghidra:
       except Exception as e:
         raise RuntimeError(str(e))
 
-    # collect dot files
+    # collect json files
     results: Dict[str,str] = {}
-    for p in output_dir.rglob('*.dot'):
+    for p in output_dir.rglob('*.json'):
       results[p.stem] = str(p.resolve())
     return results
   
@@ -130,7 +130,7 @@ class Ghidra:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-      script_path = Path(config["paths"]["scripts_path"]) / 'call_graph.py'
+      script_path = Path(config["paths"]["scripts_path"]) / 'call_graph_extractor.py'
 
       # Build ghidraHeadless command
       command = [
