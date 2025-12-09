@@ -3,13 +3,9 @@ from ghidra.util.task import TaskMonitor
 import os
 
 def export_to_dot(func, program, out_path, monitor):
-  print("== Exporting CFG for function:", func.getName())
   bbm = BasicBlockModel(program)  # Use BasicBlockModel
-  print("== BasicBlockModel created")
   body = func.getBody()
-  print("== Function body obtained")
   blocks = bbm.getCodeBlocks(monitor)  # pass TaskMonitor.DUMMY
-  print("== Code blocks obtained")
   nodes = []
   edges = []
   # We'll also collect additional metadata per block: start, end, size, sample mnemonic

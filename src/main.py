@@ -25,12 +25,10 @@ corpus_path = Path(config["paths"]["test_path"])
 output_path = Path(config["paths"]["output_path"])
   
   
-
-
 def main():
   g = Ghidra()
   #g.extract_cfg(executable_path=corpus_path/"test_3", output_dir=output_path/ "SOG")
-  g.extract_call_graph(executable_path=corpus_path/"test_3", output_dir=output_path/ "SOG")
+  #g.extract_call_graph(executable_path=corpus_path/"test_3", output_dir=output_path/ "SOG")
   
   
   
