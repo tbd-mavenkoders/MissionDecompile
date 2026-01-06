@@ -2,6 +2,46 @@ from ghidra.program.model.block import BasicBlockModel
 from ghidra.util.task import TaskMonitor
 import json
 import os
+import re
+
+RUNTIME_PATTERNS = [
+  r'^_',
+  r'^__.*',
+  r'.*@plt',
+  r'register_tm_clones',
+  r'deregister_tm_clones',
+  r'frame_dummy',
+  r'_ITM_.*',
+  r'__gmon_start__',
+  r'__stack_chk_fail',
+]
+
+def is_runtime_name(name):
+  return any(re.match(p, name) for p in RUNTIME_PATTERNS)
+
+def is_real_c_function(func):
+  name = func.getName()
+  
+  # 1. Remove thunks (PLT wrappers)
+  if func.isThunk():
+    return False
+  # 2. Name-based runtime filtering
+  if is_runtime_name(name):
+    return False
+
+  # 3. Symbol source filtering
+  sym = func.getSymbol()
+  if sym and sym.isExternal():
+    return False
+  
+  if name.startswith("FUN_"):
+    return False
+
+
+
+  return True
+
+
 
 def get_block_instructions(block, program):
   listing = program.getListing()
@@ -88,6 +128,10 @@ os.mkdir(outdir) if not os.path.exists(outdir) else None
 fm = program.getFunctionManager()
 funcs = fm.getFunctions(True)
 for f in funcs:
+  print("Processing Function:", f.getName())
+  if not is_real_c_function(f):
+    print("Skipping", f.getName(), "as it is not a real C function.")
+    continue
   try:
       sog = extract_cfg(f, program, monitor)
       out = os.path.join(outdir, f.getName() + ".json")

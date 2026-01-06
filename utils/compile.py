@@ -59,11 +59,12 @@ class Compiler:
     source_file_path: str,
     output_file_path: str,
     is_cpp: bool,
+    c_flag: bool,
     opt: OptimizationLevel = OptimizationLevel.O0,
     extra_flags: Optional[List[str]] = None,
     include_dirs: Optional[List[str]] = None,
     library_dirs: Optional[List[str]] = None,
-    libraries: Optional[List[str]] = None
+    libraries: Optional[List[str]] = None,
               ) -> Tuple[bool, str]:
     """
     Compiles a C/C++ source file into an executable binary.
@@ -94,12 +95,10 @@ class Compiler:
     # Create Output Directory if not exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    command = [compiler,
-               "-c",
-               str(source_path),
-               "-o", str(output_path), 
-               opt.value, 
-               "-w"]
+    command = [compiler]
+    if c_flag:
+      command += ["-c"]
+    command += [str(source_path), "-o", str(output_path), opt.value, "-w"]
     
     # Include directories
     if include_dirs:

@@ -46,7 +46,7 @@ def get_repair_prompt(c_code: str, compilation_errors: str, function_summary: st
     prompt += f"\n\nFunction SOG:\n{function_sog}"
   return prompt
 
-def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str, max_iterations: int, llm_interface: LLMInterface ) -> str:
+def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str, max_iterations: int, llm_interface: LLMInterface, c_flag: bool) -> str:
   """
   Generate optimized C code using LLM for the given original C code file.
   """
@@ -58,18 +58,6 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
     with open(original_c_file, "w") as f:
       f.write(c_code)
     
-    # check if original code compiles
-    status, message = c.compile_source(
-      source_file_path = original_c_file,
-      output_file_path = Path(temp_dir) / "original.out",
-      opt = OptimizationLevel.O0,
-      is_cpp = (language == "cpp")
-    )
-  
-    if status:
-      print("Original Ghidra Code compiles successfully. No optimization needed.")
-      return True, c_code
-
     
     # if not, provide an initial LLM optimization
     print("Original Ghidra Code does not compile. Starting optimization...")
@@ -89,7 +77,8 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
       source_file_path = original_c_file,
       output_file_path = Path(temp_dir) / "optimized.out",
       opt = OptimizationLevel.O0,
-      is_cpp = (language == "cpp")
+      is_cpp = (language == "cpp"),
+      c_flag = c_flag
     )
     
     if status:
@@ -103,6 +92,7 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
       # acquire optimized output through error passing
       e = ErrorNormalizer()
       error_prompt = e.format_for_llm(message)
+      print("Compilation Errors:\n", error_prompt)
       repair_prompt = get_repair_prompt(
         c_code=optimized_code,
         compilation_errors=error_prompt,
@@ -112,6 +102,8 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
         language=language
       )
       optimized_code = llm_interface.generate(repair_prompt)
+      print("Received Optimized Code from LLM.")
+      print(optimized_code)
       
       # check if it compiles
       original_c_file.write_text(optimized_code)
@@ -119,7 +111,8 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
         source_file_path = original_c_file,
         output_file_path = Path(temp_dir) / "optimized.out",
         opt = OptimizationLevel.O0,
-        is_cpp = (language == "cpp")
+        is_cpp = (language == "cpp"),
+        c_flag = c_flag
       )
       
       if status:

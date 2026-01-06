@@ -32,12 +32,17 @@ llm_interface = create_llm_interface(
   model_name=config["llm"]["gemini_model_name"],
   api_key=config["llm"]["gemini_api_key"]
 )
-'''
 llm_interface = create_llm_interface(
     provider=config["llm"]["ollama_provider"],
     model_name=config["llm"]["ollama_model_name"],
     # api_key=config["llm"].get("ollama_api_key"),  # Not needed for Ollama
     base_url=config["llm"]["ollama_base_url"]
+)
+'''
+llm_interface = create_llm_interface(
+    provider=config["llm"]["vllm_provider"],
+    model_name=config["llm"]["vllm_model_name"],
+    base_url=config["llm"]["vllm_base_url"]
 )
 
 
@@ -79,14 +84,33 @@ def separate_header_and_source(code: str) -> Tuple[str, str]:
     return header, source
 
 def get_program_code(program_data: Dict) -> Dict:
+    #maintain a set for unique headers
     program_header = ""
+    headers_set = set()     
     program_code = ""
     combined_code = ""
+    
+    # add all function headers and sources
     for function in program_data['functions']:
+        if function['f_name'] == "main":
+            continue
         header, source = separate_header_and_source(function['optimized_code'])
-        program_header += header + "\n"
+        if header not in headers_set:
+            program_header += header + "\n"
+            headers_set.add(header)
         program_code += source + "\n"
+        
+    # add main function if exists
+    for function in program_data['functions']:
+        if function['f_name'] == "main":
+            header, source = separate_header_and_source(function['optimized_code'])
+            if header not in headers_set:
+                program_header += header + "\n"
+            program_code += source + "\n"
     combined_code = program_header + "\n" + program_code
+    
+    print("Combined Program Code Generated.")
+    print(combined_code)
     
     return combined_code
   
@@ -102,12 +126,12 @@ def split_enrichment(executable_path: Path):
     # -- Acquire ASM and create a dictionary of function_name -> asm
     asm_dict = {f.name: f.instructions for f in get_asm_list(executable_path)}
     ghidra_dict = get_ghidra_dict(executable_path)
-    
-    
-    # -- Acquire SOG and Call Graph    
+
+    # -- Acquire SOG and Call Graph
     output_dir = create_cfg_output_dir(executable_name)
     cfg_map = g.extract_cfg(executable_path, output_dir)
     callgraph_map = g.extract_call_graph(executable_path, output_dir)
+    filtered_functions = cfg_map.keys()
     
     # -- Topologically Sort Call Graph
     callgraph = build_call_graph(callgraph_map.get('call_graph'))
@@ -117,6 +141,10 @@ def split_enrichment(executable_path: Path):
     # -- For each function in topological order, enrich its SOG using LLM
     functions = []
     for function_name in sorted_functions:
+        
+        if function_name not in filtered_functions:
+            continue
+        
         f_data = {}
         f_data['f_name'] = function_name
         f_data['asm'] = asm_dict.get(function_name, "")
@@ -135,23 +163,25 @@ def split_enrichment(executable_path: Path):
         f_data['callees'] = callees
         
         # LLM Guided Enrichment for Summary and Optimized Code
-        '''
-        Summary for function : Should pass in Ghidra Code, ASM
-        Optimize Code for function : Should pass in Ghidra Code, Summary, SOG
-        '''
+        print(f"Optimizing Function:{function_name}")
         f_data['function_summary'] = gen_code_summary(
             asm=f_data['asm'],
             ghidra=f_data['ghidra_code'] 
         )
-        f_data['optimization_status'], f_data['optimized_code'] = get_optimized_code(
-            c_code=f_data['ghidra_code'],
-            function_summary=f_data['function_summary'],
-            caller_and_callee_summary="",
-            function_sog=f_data['sog_dot'],
-            language="c",
-            llm_interface=llm_interface,
-            max_iterations=3
-        )
+        
+        if f_data['f_name'] == "main":
+            f_data['optimization_status'], f_data['optimized_code'] = True, f_data['ghidra_code']
+        else:   
+            f_data['optimization_status'], f_data['optimized_code'] = get_optimized_code(
+                c_code=f_data['ghidra_code'],
+                function_summary=f_data['function_summary'],
+                caller_and_callee_summary="",
+                function_sog=f_data['sog_dot'],
+                language="c",
+                llm_interface=llm_interface,
+                max_iterations=3,
+                c_flag=True
+            )
         functions.append(f_data)
         
     program_data['functions'] = functions
@@ -176,6 +206,7 @@ def combine_enrichment(program_data: Dict) -> str:
         callgraph=program_data['callgraph']
     )
     # get optimized program code
+    print("Optimizing Entire Program Code...")
     status, optimized_program_code = get_optimized_code(
         c_code=combined_code,
         function_summary=program_summary,
@@ -183,7 +214,8 @@ def combine_enrichment(program_data: Dict) -> str:
         function_sog="",
         language="c",
         llm_interface=llm_interface,
-        max_iterations=3
+        max_iterations=3,
+        c_flag=False
     )
     program_data['program_summary'] = program_summary
     program_data['context_summary'] = context_summary
@@ -227,7 +259,8 @@ def main():
     test_executable = data_dir / "test_3"
     data = split_enrichment(test_executable)
     data = combine_enrichment(data)
-    
+    with open(output_dir / "final_program_code.c", "w") as f:
+        f.write(data['optimized_code'])
     with open(str(Path(output_dir) / f"enriched_data_{test_executable.stem}.json"), "w") as f:
         json.dump(data, f, indent=4)
 

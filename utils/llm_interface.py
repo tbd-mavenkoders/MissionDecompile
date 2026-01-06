@@ -178,6 +178,80 @@ class GeminiInterface(LLMInterface):
             return ""
 
 
+class VLLMInterface(LLMInterface):
+    """
+    Interface for vLLM OpenAI GPT-OSS models
+    """
+    def __init__(
+        self,
+        model_name: str = "openai/gpt-oss-20b",
+        temperature: float = 1.0,
+        max_tokens: Optional[int] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ):
+        super().__init__(model_name, temperature, max_tokens, api_key)
+        # vLLM endpoint
+        self.base_url = base_url or os.getenv("VLLM_BASE_URL", "http://192.168.41.119:10011")
+        self.api_endpoint = f"{self.base_url}/v1/responses"
+    
+    def generate(self, prompt: str) -> str:
+        """
+        Generate response using vLLM OpenAI API.
+        Makes HTTP POST request to vLLM server.
+        """
+        try:
+            payload = {
+                "model": self.model_name,
+                "input": prompt,
+            }
+            
+            # Add optional parameters if specified
+            if self.temperature is not None:
+                payload["temperature"] = self.temperature
+            if self.max_tokens:
+                payload["max_output_tokens"] = self.max_tokens
+            
+            # Make POST request to vLLM server
+            response = requests.post(
+                self.api_endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=600  # 10 minute timeout for large models
+            )
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            # Extract the response text from output array
+            # Looking for the message type output with role="assistant"
+            if "output" in result and isinstance(result["output"], list):
+                for output_item in result["output"]:
+                    if (output_item.get("type") == "message" and 
+                        output_item.get("role") == "assistant" and
+                        "content" in output_item):
+                        # Extract text from content array
+                        for content_item in output_item["content"]:
+                            if content_item.get("type") == "output_text" and "text" in content_item:
+                                return clean_llm_output(content_item["text"])
+            
+            print(f"[VLLMInterface] No valid response found in result: {result}")
+            return ""
+        
+        except requests.exceptions.Timeout:
+            print(f"[VLLMInterface] Request timeout for model {self.model_name}")
+            return ""
+        except requests.exceptions.RequestException as e:
+            print(f"[VLLMInterface] Request error: {e}")
+            return ""
+        except json.JSONDecodeError as e:
+            print(f"[VLLMInterface] JSON decode error: {e}")
+            return ""
+        except Exception as e:
+            print(f"[VLLMInterface] Error: {e}")
+            return ""
+
+
 class OllamaInterface(LLMInterface):
     """
     Interface for Ollama models (local or remote)
@@ -223,7 +297,7 @@ class OllamaInterface(LLMInterface):
                 self.api_endpoint,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=86400  # 5 minute timeout for large models
+                timeout=600  # 5 minute timeout for large models
             )
             
             response.raise_for_status()
@@ -264,6 +338,7 @@ def create_llm_interface(
         'openai': OpenAIInterface,
         'gemini': GeminiInterface,
         'ollama': OllamaInterface,
+        'vllm': VLLMInterface,
     }
     
     if provider.lower() not in providers:
@@ -274,8 +349,8 @@ def create_llm_interface(
     
     interface_class = providers[provider.lower()]
     
-    # For Ollama, pass base_url if provided
-    if provider.lower() == 'ollama' and base_url:
+    # For Ollama and vLLM, pass base_url if provided
+    if provider.lower() in ['ollama', 'vllm'] and base_url:
         return interface_class(model_name=model_name, api_key=api_key, base_url=base_url)
     
     return interface_class(model_name=model_name, api_key=api_key)
