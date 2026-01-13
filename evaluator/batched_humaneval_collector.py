@@ -51,7 +51,7 @@ output_dir = Path(config["humaneval"]["output_path"])
 # System: 24 CPU cores, 188GB RAM available
 COMPILATION_BATCH_SIZE = 20  # Compile 20 programs in parallel (lightweight, CPU-bound)
 GHIDRA_BATCH_SIZE = 12  # Process 12 executables in Ghidra at once (memory-intensive, ~15GB per instance)
-LLM_BATCH_SIZE = 8  # Send 8 LLM requests in parallel (hardware constraint)
+LLM_BATCH_SIZE = 16  # Send 8 LLM requests in parallel (hardware constraint)
 
 
 def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str) -> str:
@@ -353,6 +353,8 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
     Enrich function data using pre-extracted Ghidra analysis.
     """
     program_data = {}
+    program_data['index'] = data['index']
+    program_data['language'] = data['language']
     program_data['executable_name'] = ghidra_result['executable_name']
     program_data['opt'] = data['opt']
     program_data['test'] = data['test']
@@ -383,7 +385,7 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
         f_data = {}
         f_data['f_name'] = function_name
         f_data['asm'] = data['asm']
-        f_data['ghidra_code'] = data['ghidra_pseudo']
+        f_data['ida_code'] = data['ida_pseudo']
         
         # Get SOG
         sog_path = cfg_map.get(function_name)
@@ -418,8 +420,8 @@ def batch_optimize_functions(enriched_programs: List[Dict]) -> List[Dict]:
         for func_data in prog_data['functions']:
             summary_prompt = config["prompts"]["summary_prompt"]
             prompt = f"{summary_prompt}"
-            if func_data.get('ghidra_code'):
-                prompt += f"\n\nGhidra Code:\n```c\n{func_data['ghidra_code']}\n```"
+            if func_data.get('ida_code'):
+                prompt += f"\n\nIDA Code:\n```c\n{func_data['ida_code']}\n```"
             if func_data.get('asm'):
                 prompt += f"\n\nAssembly Instructions:\n{func_data['asm']}"
             summary_prompts.append((prog_idx, prompt))
@@ -440,7 +442,7 @@ def batch_optimize_functions(enriched_programs: List[Dict]) -> List[Dict]:
         for func_data in prog_data['functions']:
             print(f"[Batch Optimize] Optimizing function {func_data['f_name']} in program {prog_idx}...")
             func_data['optimization_status'], func_data['optimized_code'] = get_optimized_code(
-                c_code=func_data['ghidra_code'],
+                c_code=func_data['ida_code'],
                 function_summary=func_data['function_summary'],
                 caller_and_callee_summary="",
                 function_sog=func_data['sog_dot'],
@@ -486,8 +488,6 @@ def process_batch(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
             continue
         
         enriched_data = split_enrichment(compile_result.data, ghidra_result)
-        enriched_data['index'] = compile_result.data['index']
-        enriched_data['language'] = compile_result.data['language']
         enriched_programs.append(enriched_data)
     
     # Step 4: Batch LLM optimization

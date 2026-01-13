@@ -71,17 +71,15 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
     output = json.load(out_f)
     
   for data in output:
-    if data["index"] != 28:
-      continue
     log = {}
     corpus_index = data["index"]
     optimized_code = ""
-    ghidra_code = ""
+    ida_code = ""
     c_include = ""
     for function in data["functions"]:
       if function["f_name"] == "func0" and function["optimization_status"] == True:
         optimized_code = function["optimized_code"]
-        ghidra_code = function["ghidra_code"]
+        ida_code = function["ida_code"]
         break
     test_code = data["test"]
     c_include += data["func_dep"] + "\n"
@@ -90,7 +88,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
     log["index"] = corpus_index
     log["original_code"] = data["original_code"]
     log["optimized_code"] = optimized_code
-    log["ghidra_code"] = ghidra_code
+    log["ida_code"] = ida_code
     log["test_code"] = test_code
     
        
@@ -137,6 +135,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
         stats[opt]["execution_failures"] += 1
         print("Error : ", runtime_message)
         
+    '''
     if not compiled or not executed:
       log["runtime_message"] = runtime_message
       prompt = config["prompts"]["analysis_prompt"] + "\n\n" + str(log)
@@ -156,6 +155,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
       else:
         with open(analysis_path, "w") as f:
           json.dump([error_analysis], f, indent=4)
+    '''
 
       
       

@@ -2,15 +2,15 @@ paths:
   ghidra_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
   postscript_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/DecLLMv2/ghidra/decompile.py
   ghidra_root_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC
-  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/src/scripts
+  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v3-IDA/MissionDecompile/src/scripts
 
 humaneval:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/humaneval-decompile
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v3-IDA/MissionDecompile/data/humaneval-decompile
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v3-IDA/MissionDecompile/output/humaneval-decompile
 
 exebench:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/exebench
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/exebench
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v3-IDA/MissionDecompile/data/exebench
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v3-IDA/MissionDecompile/output/exebench
 
 
 llm:
@@ -23,13 +23,13 @@ llm:
   vllm_provider: vllm
   vllm_model_name: openai/gpt-oss-20b
   vllm_temperature: 0.3
-  vllm_base_url: http://192.168.41.119:10011
+  vllm_base_url: http://127.0.0.1:8000
 
 
 
 prompts:
   system_prompt:
-    You are given a Ghidra-decompiled C/C++ function body (pseudocode) and a short natural-language summary describing the function’s purpose,
+    You are given an IDA-decompiled C/C++ function body (pseudocode) and a short natural-language summary describing the function’s purpose,
     Produce a single Linux-compilable C or C++ function that implements the same source-level behavior.
     - Language & Function Signature (MANDATORY)
     Reconstruct the original source-level function signature, not the decompiler ABI.
@@ -85,13 +85,13 @@ prompts:
     - index ; The corpus index of the function.
     - original_code ; The original source code of a function.
     - optimized_code ; The optimized version of the original source code obtained through LLM optimization.
-    - ghidra_code ; The decompiled code of the function obtained from Ghidra
+    - ida_code ; The decompiled code of the function obtained from ida
     - test_code ; The test code to validate the function's correctness.
     - runtime_message ; The runtime error message encountered during execution.
     The original code is built to run with the provided test code, while the optimized code is intended to be as similar in functionality to the original code as possible.
     Your task is to analyze the runtime error message in the context of the provided codes.
       Create a structured object to identify the error associated with the optimized code and classify it into one of the following phases
-      1. Ghidra Code Issue; Errors originating from inaccuracies or limitations in Ghidra's decompilation process / if ghidra returns an inaccurate return type / argument type / argument numbers
+      1. IDA Code Issue; Errors originating from inaccuracies or limitations in IDA's decompilation process / if IDA returns an inaccurate return type / argument type / argument numbers
       2. LLM Optimization Issue; Errors introduced during the optimization of the original code by the Language Model.
       3. Test Code Issue; Errors stemming from problems within the provided test code itself.
       4. Environment Issue; Errors caused by external factors such as compilation settings, library versions, or system configurations.

@@ -79,7 +79,7 @@ def split_enrichment(data: Dict,executable_path: Path):
         f_data = {}
         f_data['f_name'] = function_name
         f_data['asm'] = data['asm']
-        f_data['ghidra_code'] = data['ghidra_pseudo']
+        f_data['ida_code'] = data['ida_pseudo']
         
         # parse the CFG DOT file to get the SOG
         sog_path = cfg_map.get(function_name)
@@ -97,11 +97,11 @@ def split_enrichment(data: Dict,executable_path: Path):
         print(f"Optimizing Function:{function_name}")
         f_data['function_summary'] = gen_code_summary(
             asm=f_data['asm'],
-            ghidra=f_data['ghidra_code'] 
+            ghidra=f_data['ida_code'] 
         )
     
         f_data['optimization_status'], f_data['optimized_code'] = get_optimized_code(
-            c_code=f_data['ghidra_code'],
+            c_code=f_data['ida_code'],
             function_summary=f_data['function_summary'],
             caller_and_callee_summary="",
             function_sog=f_data['sog_dot'],
