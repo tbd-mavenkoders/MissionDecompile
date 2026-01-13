@@ -1,0 +1,72 @@
+paths:
+  test_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/data
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/output
+  ghidra_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
+  postscript_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/DecLLMv2/ghidra/decompile.py
+  ghidra_root_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC
+  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/src/scripts
+  test_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/data
+
+humaneval:
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/data/humaneval-decompile
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/output/humaneval-decompile
+
+exebench:
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/data/exebench
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/output/exebench
+
+
+llm:
+
+  ollama_provider: ollama
+  ollama_model_name: gpt-oss:20b
+  ollama_temperature: 0.3
+  ollama_base_url: http://192.168.41.119:10010
+
+  vllm_provider: vllm
+  vllm_model_name: openai/gpt-oss-20b
+  vllm_temperature: 0.3
+  vllm_base_url: http://192.168.99.160:10011
+
+
+
+prompts:
+  system_prompt:
+    You are given a Ghidra decompiled program/function body (pseudocode) and a short natural-language summary describing the function's purpose. Produce a single Linux-compilable C or C++ function that implements the same behavior, with these strict rules
+    1. Language & signature
+    - Use the same function names, argument names, and argument types exactly as in the Ghidra pseudocode.
+    - Keep the exact number and types of parameters. Do not add or remove parameters.
+    - Decide the functions return type by whether the function must "cause an effect" (choose `void` and perform the effect) or "compute+return a value" (choose the appropriate non-void type).
+    - Do NOT include a `main()` unless the code provided already contains one.
+    - Do NOT remove the main function if it is present in the pseudocode.
+    2. Code style & correctness
+    - The functions must compile on modern Linux with `gcc`/`g++` without errors.
+    - Add only the minimal required `#include` directives needed by the function (`<stdint.h>`, `<stdlib.h>`, `<string.h>`, `<stdbool.h>`, `<math.h>`, `<stddef.h>`, `<limits.h>`, `<stdio.h>`, or `<string>`/`<vector>` etc. for C++).
+    - Do not use `goto`.
+    - Minimize intermediate variables — prefer direct expressions when readable.
+    - Preserve the original functions semantics and logic from the summary and pseudocode. If pseudocode is ambiguous, implement the most likely, safe behavior.
+    - Ensure correct handling of signed/unsigned types and avoid undefined behavior (no out-of-bounds array access, no integer division by zero, etc.).
+    - Use explicit casts only when necessary.
+    - Remove any declarations of the functions whose definition is provided.
+    3. Output format
+    - Only print the fixed source code (the functions and required headers). Nothing else.
+    4. Clarifying behavior guidelines (embed semantics from the given summary)
+    - If the summary says "compute and return X", return that computed value.
+    - For error conditions (invalid pointer/size), choose a safe behavior return an error code if the original returns status; otherwise do nothing or clamp values.
+    Now produce the functions source code implementing the pseudocode + summary exactly as requested.
+
+
+  compilation_error:
+    Please fix all compilation errors in the given source code while preserving the original functions name. Follow these rules
+    1. Do not change the functions name, the number of arguments, their types, or their order unless required to fix compilation errors.
+    2. Do not generate a main functions if the provided code does not contain one.
+    3. Only output the corrected source code. Do not explain anything, and do not include extra instructions.
+    4. If compilation errors are caused by missing library functions or types, add the minimal required include statements.
+    5. Do not alter the function’s purpose. Use the provided summary to maintain correct logic and semantics.
+    6. Remove undefined behavior where possible (NULL checks, bounds checks) only if required to make the code compile.
+    7. The output must be valid C or C++ (matching the language of the provided code) and must compile on Linux.
+    8. Do not introduce new helper functions unless required for compilation; prefer fixing the existing code.
+    9. Only print the fixed, compilable source code.
+
+
+  summary_prompt: Summarize the provided function in no less than 45 words. Do not return more than 70 words. Focus on the function's purpose and key operations. Avoid implementation details. Use clear, concise language suitable for a technical audience. Only return the summary text without additional commentary.
