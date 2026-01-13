@@ -354,7 +354,9 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
     """
     program_data = {}
     program_data['executable_name'] = ghidra_result['executable_name']
+    program_data['opt'] = data['opt']
     program_data['test'] = data['test']
+    program_data['original_code'] = data['func']
     program_data['func_dep'] = data['func_dep']
 
     program_data['functions'] = []
