@@ -43,7 +43,7 @@ print("Processing program:", program.getName())
 if len(getScriptArgs()) > 0:
     output_dir = getScriptArgs()[0]
 else:
-    output_dir = "/workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/MissionDecompile/output/SOG"
+    output_dir = "/workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile/SOG"
 
 # Ensure output directory exists
 outdir = os.path.join(output_dir, program.getName())

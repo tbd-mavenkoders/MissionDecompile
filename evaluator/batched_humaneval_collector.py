@@ -171,7 +171,7 @@ class CompilationResult:
 
 def create_cfg_output_dir(executable_name: str) -> Path:
     """Create output directory for CFG extraction."""
-    output_dir_path = Path(config["paths"]["output_path"]) / "SOG" / executable_name
+    output_dir_path = Path(config["humaneval"]["output_path"]) / "SOG" / executable_name
     if output_dir_path.exists():
         shutil.rmtree(output_dir_path)
     output_dir_path.mkdir(parents=True, exist_ok=True)

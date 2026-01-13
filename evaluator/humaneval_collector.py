@@ -35,7 +35,7 @@ output_dir = Path(config["humaneval"]["output_path"])
 
 
 def create_cfg_output_dir(executable_name: str) -> Path:
-    output_dir = Path(config["paths"]["output_path"]) / "SOG" / executable_name
+    output_dir = Path(config["humaneval"]["output_path"]) / "SOG" / executable_name
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
