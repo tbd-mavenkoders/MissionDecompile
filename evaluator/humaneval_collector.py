@@ -46,6 +46,7 @@ def split_enrichment(data: Dict,executable_path: Path):
     program_data = {}
     program_data['index'] = data['index']
     program_data['language'] = data['language']
+    program_data['original_code'] = data['func']
     program_data['executable_name'] = executable_path.stem
     program_data['test'] = data['test']
     program_data['func_dep'] = data['func_dep']
@@ -85,7 +86,7 @@ def split_enrichment(data: Dict,executable_path: Path):
         sog_path = cfg_map.get(function_name)
         with open(sog_path, 'r') as f:
             sog_dot = f.read()
-        f_data['sog_dot'] = json.loads(sog_dot)
+        #f_data['sog_dot'] = json.loads(sog_dot)
         
         # Get Caller and Callee Context
         callers = [caller for caller, callees in callgraph.items() if function_name in callees]
@@ -99,12 +100,15 @@ def split_enrichment(data: Dict,executable_path: Path):
             asm=f_data['asm'],
             ghidra=f_data['ghidra_code'] 
         )
+        
+        caller_callee_summary = gen_context_summary(callgraph)
+        print(f"Caller and Callee Summary:\n{caller_callee_summary}")
     
         f_data['optimization_status'], f_data['optimized_code'] = get_optimized_code(
             c_code=f_data['ghidra_code'],
             function_summary=f_data['function_summary'],
-            caller_and_callee_summary="",
-            function_sog=f_data['sog_dot'],
+            caller_and_callee_summary=caller_callee_summary,
+            function_sog="",
             language=data['language'],
             llm_interface=llm_interface,
             max_iterations=3,
@@ -121,7 +125,8 @@ def split_enrichment(data: Dict,executable_path: Path):
 def gen_context_summary(callgraph: Dict[str, List[str]]) -> str:
     prompt = ""
     for function, callees in callgraph.items():
-        prompt += f"{function} calls {', '.join(callees) if callees else 'no functions'}\n"
+        if function == "func0":
+            prompt += f"{function} calls {', '.join(callees) if callees else 'no functions'}\n"
     return prompt
 
 

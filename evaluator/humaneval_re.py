@@ -40,7 +40,8 @@ def compile_and_execute(c_file_path: str, language: str) -> Tuple[bool, bool, st
     output_file_path = output_executable,
     opt = OptimizationLevel.O0,
     is_cpp = (language == "cpp"),
-    c_flag = False
+    c_flag = False,
+    extra_flags = ["-lm"]
   )
   # if fails to compile, return error
   if not status:
@@ -71,8 +72,6 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
     output = json.load(out_f)
     
   for data in output:
-    if data["index"] != 28:
-      continue
     log = {}
     corpus_index = data["index"]
     optimized_code = ""
@@ -137,6 +136,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
         stats[opt]["execution_failures"] += 1
         print("Error : ", runtime_message)
         
+    '''
     if not compiled or not executed:
       log["runtime_message"] = runtime_message
       prompt = config["prompts"]["analysis_prompt"] + "\n\n" + str(log)
@@ -156,20 +156,8 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
       else:
         with open(analysis_path, "w") as f:
           json.dump([error_analysis], f, indent=4)
+    '''
 
-      
-      
-      
-
-      
-      
-      
-      
-      
-        
-        
-        
-        
         
     # print rates for every optimization level
     for opt_level, opt_stats in stats.items():

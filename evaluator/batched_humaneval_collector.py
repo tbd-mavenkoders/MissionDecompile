@@ -334,6 +334,15 @@ def gen_code_summary_batch(prompts: List[Tuple[int, str]]) -> Dict[int, str]:
     print(f"[Batch LLM] Completed {len(results)} summaries\n")
     return results
 
+def gen_context_summary(callgraph: Dict[str, List[str]]) -> str:
+    prompt = ""
+    for function, callees in callgraph.items():
+        if function == "func0":
+            prompt += f"{function} calls {', '.join(callees) if callees else 'no functions'}\n"
+    print(f"Generated Context Summary:\n{prompt}")
+    return prompt
+
+
 
 def gen_code_summary(asm: str, ghidra: str) -> str:
     """Generate a single code summary (for compatibility)."""
@@ -353,6 +362,8 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
     Enrich function data using pre-extracted Ghidra analysis.
     """
     program_data = {}
+    program_data['index'] = data['index']
+    program_data['language'] = data['language']
     program_data['executable_name'] = ghidra_result['executable_name']
     program_data['opt'] = data['opt']
     program_data['test'] = data['test']
@@ -390,7 +401,7 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
         if sog_path:
             with open(sog_path, 'r') as f:
                 sog_dot = f.read()
-            f_data['sog_dot'] = json.loads(sog_dot)
+            #f_data['sog_dot'] = json.loads(sog_dot)
         else:
             f_data['sog_dot'] = ""
         
@@ -442,8 +453,8 @@ def batch_optimize_functions(enriched_programs: List[Dict]) -> List[Dict]:
             func_data['optimization_status'], func_data['optimized_code'] = get_optimized_code(
                 c_code=func_data['ghidra_code'],
                 function_summary=func_data['function_summary'],
-                caller_and_callee_summary="",
-                function_sog=func_data['sog_dot'],
+                caller_and_callee_summary=gen_context_summary(prog_data['callgraph']),
+                function_sog="",
                 language=prog_data.get('language', 'c'),
                 llm_interface=llm_interface,
                 max_iterations=3,
@@ -486,8 +497,6 @@ def process_batch(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
             continue
         
         enriched_data = split_enrichment(compile_result.data, ghidra_result)
-        enriched_data['index'] = compile_result.data['index']
-        enriched_data['language'] = compile_result.data['language']
         enriched_programs.append(enriched_data)
     
     # Step 4: Batch LLM optimization

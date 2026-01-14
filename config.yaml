@@ -39,6 +39,7 @@ prompts:
     Never expose internal ABI artifacts such as raw pointers used for return-value optimization, begin/end pointer pairs, helper structs (e.g., ArrayRange), or allocator/M* internals.
     - STRICT RULES
     Do NOT change the number of parameters.
+    Do NOT change the name of the function
     Do NOT convert value parameters into pointer parameters.
     Do NOT introduce helper structs or wrapper types.
     - Return-Type Reconstruction Rules (CRITICAL)
