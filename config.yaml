@@ -2,15 +2,15 @@ paths:
   ghidra_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
   postscript_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/DecLLMv2/ghidra/decompile.py
   ghidra_root_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC
-  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/src/scripts
+  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/src/scripts
 
 humaneval:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/humaneval-decompile
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/data/humaneval-decompile
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/output/humaneval-decompile
 
 exebench:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/exebench
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/exebench
+  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/data/exebench
+  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/output/exebench
 
 
 llm:

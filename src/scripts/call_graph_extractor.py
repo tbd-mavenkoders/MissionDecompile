@@ -31,4 +31,4 @@ def export_to_dot(call_graph, output_dir, program):
   
 # Execute  
 call_graph = get_call_graph()  
-export_to_dot(call_graph, "/workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile/SOG", currentProgram)
+export_to_dot(call_graph, "/workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v4-TypeForge/MissionDecompile/output/humaneval-decompile/SOG", currentProgram)
