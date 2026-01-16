@@ -59,7 +59,7 @@ output_dir = Path(config["humaneval"]["output_path"])
 # Batching configuration
 COMPILATION_BATCH_SIZE = 20
 GHIDRA_BATCH_SIZE = 12
-LLM_BATCH_SIZE = 8
+LLM_BATCH_SIZE = 16
 
 # D-Helix API configuration
 DHELIX_API_URL = "http://127.0.0.1:10012"
