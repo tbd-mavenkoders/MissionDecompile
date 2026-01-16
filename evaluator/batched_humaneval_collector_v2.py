@@ -568,8 +568,14 @@ def split_enrichment(data: Dict, ghidra_result: Dict, original_binary_path: Path
     cfg_map = ghidra_result['cfg_map']
     callgraph_map = ghidra_result['callgraph_map']
     
-    callgraph = build_call_graph(callgraph_map.get('call_graph', {}))
-    sorted_functions = topological_sort(callgraph)
+    # Build call graph if available
+    if 'call_graph' in callgraph_map and callgraph_map['call_graph']:
+        callgraph = build_call_graph(callgraph_map['call_graph'])
+        sorted_functions = topological_sort(callgraph)
+    else:
+        # No call graph available, use default
+        callgraph = {}
+        sorted_functions = []
     
     if len(sorted_functions) == 0:
         sorted_functions.append("func0")
