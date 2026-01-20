@@ -188,7 +188,7 @@ def main():
   """
   
   corpus_file = corpus_path / "humaneval-decompile.json"
-  output_file = output_path / "batched_enriched_humaneval_decompile.json"
+  output_file = output_path / "batched_enriched_humaneval_decompile_v2.json"
   
   stats = process_json_file(corpus_file, output_file)
         

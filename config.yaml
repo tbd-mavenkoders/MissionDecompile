@@ -23,7 +23,7 @@ llm:
   vllm_provider: vllm
   vllm_model_name: openai/gpt-oss-20b
   vllm_temperature: 0.3
-  vllm_base_url: http://127.0.0.1:8000
+  vllm_base_url: http://192.168.41.119:10011
 
 
 
