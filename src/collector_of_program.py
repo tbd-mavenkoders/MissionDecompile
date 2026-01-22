@@ -26,19 +26,7 @@ with open(CONFIG_PATH, "r") as f:
 c = Compiler()
 g = Ghidra()
 d = Disassembler()
-'''
-llm_interface = create_llm_interface(
-  provider=config["llm"]["gemini_provider"],
-  model_name=config["llm"]["gemini_model_name"],
-  api_key=config["llm"]["gemini_api_key"]
-)
-llm_interface = create_llm_interface(
-    provider=config["llm"]["ollama_provider"],
-    model_name=config["llm"]["ollama_model_name"],
-    # api_key=config["llm"].get("ollama_api_key"),  # Not needed for Ollama
-    base_url=config["llm"]["ollama_base_url"]
-)
-'''
+
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
     model_name=config["llm"]["vllm_model_name"],

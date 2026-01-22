@@ -72,6 +72,8 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
     output = json.load(out_f)
     
   for data in output:
+    if data["language"] != "c":
+      continue
     log = {}
     corpus_index = data["index"]
     optimized_code = ""
