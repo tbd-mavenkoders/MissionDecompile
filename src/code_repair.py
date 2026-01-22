@@ -21,7 +21,7 @@ with open(CONFIG_PATH, "r") as f:
 
 
 
-def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str) -> str:
+def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, type_constraints: dict, language: str) -> str:
   """
   Generate the initial prompt for the repair tool given C code of the particular function.
   """
@@ -31,6 +31,8 @@ def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_sum
     prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
   if function_sog:
     prompt += f"\n\nFunction SOG:\n{function_sog}"
+  if type_constraints:
+    prompt += f"\n\nType Constraints:\n{type_constraints}"
   return prompt
 
 
@@ -46,7 +48,7 @@ def get_repair_prompt(c_code: str, compilation_errors: str, function_summary: st
     prompt += f"\n\nFunction SOG:\n{function_sog}"
   return prompt
 
-def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str, max_iterations: int, llm_interface: LLMInterface, c_flag: bool) -> str:
+def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, type_constraints: dict, language: str, max_iterations: int, llm_interface: LLMInterface, c_flag: bool) -> str:
   """
   Generate optimized C code using LLM for the given original C code file.
   """
@@ -66,6 +68,7 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
       function_summary=function_summary,
       caller_and_callee_summary=caller_and_callee_summary,
       function_sog=function_sog,
+      type_constraints=type_constraints,
       language=language
       )
     
@@ -99,6 +102,7 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
         function_summary=function_summary,
         caller_and_callee_summary=caller_and_callee_summary,
         function_sog=function_sog,
+        type_constraints=type_constraints,
         language=language
       )
       optimized_code = llm_interface.generate(repair_prompt)

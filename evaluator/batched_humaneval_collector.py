@@ -54,7 +54,7 @@ GHIDRA_BATCH_SIZE = 12  # Process 12 executables in Ghidra at once (memory-inten
 LLM_BATCH_SIZE = 8  # Send 8 LLM requests in parallel (hardware constraint)
 
 
-def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str) -> str:
+def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, type_constraints: dict, language: str) -> str:
     """
     Generate the initial prompt for the repair tool given C code of the particular function.
     """
@@ -64,10 +64,12 @@ def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_sum
         prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
     if function_sog:
         prompt += f"\n\nFunction SOG:\n{function_sog}"
+    if type_constraints:
+        prompt += f"\n\nType Constraints:\n{type_constraints}"
     return prompt
 
 
-def get_repair_prompt(c_code: str, compilation_errors: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str) -> str:
+def get_repair_prompt(c_code: str, compilation_errors: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, type_constraints: dict, language: str) -> str:
     """
     Generate the repair prompt for the repair tool given C code of the particular function and compilation errors.
     """
@@ -77,10 +79,84 @@ def get_repair_prompt(c_code: str, compilation_errors: str, function_summary: st
         prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
     if function_sog:
         prompt += f"\n\nFunction SOG:\n{function_sog}"
+    if type_constraints:
+        prompt += f"\n\nType Constraints:\n{type_constraints}"
     return prompt
 
+def get_type_constraints(data: Dict) -> Dict:
+    '''
+    Enrich the type constraints using TypeForge
+    arguments:
+        data: Dict - The program data dictionary
+    '''
+    index = data['index']
+    typeforge_path = corpus_path / "typeforge" / f"func_{index}"
+    # if type constraints do not exist, skip
+    if not typeforge_path.exists():
+        return {}
+    # else, get number of files in the directory (should be >1)
+    type_files = list(typeforge_path.glob("*.json"))
+    if len(type_files) == 1:
+        return {}
+    # read the json file 'varType.json'
+    varType_file = typeforge_path / "varType.json"
+    all_constraints = []
+    if varType_file.exists():
+        with open(varType_file, "r") as f:
+            varType = json.load(f)
+        '''
+        {
+        "0x100000" : {
+        "Name" : "func0",
+        "Parameters" : { },
+        "LocalVariables" : {
+            "0x100000:RegUniq[0x1001a5]" : {
+            "Name" : "puVar7",
+            "desc" : "pointer",
+            "TypeConstraint" : "TypeConstraint_1183941d"
+            }
+        }
+        }
+        }
+        select only those objects pertaining to func0
+        '''
+        for type_constraint in varType.values():
+            if type_constraint['Name'] == 'func0':
+                # check for the 'TypeConstraint' field in each local variable and parameter
+                local_variables = type_constraint.get('LocalVariables', {})
+                parameters = type_constraint.get('Parameters', {})
+                for var_loc, var_info in local_variables.items():
+                    if 'TypeConstraint' in var_info:
+                        # modify the value of the 'TypeConstraint' field
+                        file_name = var_info['TypeConstraint']
+                        print("FILE NAME:", file_name)
+                        # file name starts with TypeConstraint_1183941d_final or TypeConstraint_1183941d_final_Dl
+                        constraint_file = typeforge_path / f"{file_name}_final.json"
+                        constraint_file_dl = typeforge_path / f"{file_name}_final_DI.json"
+                        if constraint_file.exists():
+                            with open(constraint_file, "r") as cf:
+                                constraint_data = json.load(cf)
+                            var_info['TypeConstraint'] = constraint_data
+                        elif constraint_file_dl.exists():
+                            with open(constraint_file_dl, "r") as cf:
+                                constraint_data = json.load(cf)
+                            var_info['TypeConstraint'] = constraint_data
+                for param_loc, param_info in parameters.items():
+                    if 'TypeConstraint' in param_info:
+                        # modify the value of the 'TypeConstraint' field
+                        file_name = param_info['TypeConstraint']
+                        constraint_file = typeforge_path / f"{file_name}.json"
+                        if constraint_file.exists():
+                            with open(constraint_file, "r") as cf:
+                                constraint_data = json.load(cf)
+                            param_info['TypeConstraint'] = constraint_data            
+                all_constraints.append(type_constraint)
+    return all_constraints
+    
 
-def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, language: str, max_iterations: int, llm_interface: LLMInterface, c_flag: bool) -> Tuple[bool, str]:
+
+
+def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_summary: str, function_sog: str, type_constraints: dict, language: str, max_iterations: int, llm_interface: LLMInterface, c_flag: bool) -> Tuple[bool, str]:
     """
     Generate optimized C code using LLM for the given original C code file.
     """
@@ -100,6 +176,7 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
             function_summary=function_summary,
             caller_and_callee_summary=caller_and_callee_summary,
             function_sog=function_sog,
+            type_constraints=type_constraints,
             language=language
         )
         
@@ -133,6 +210,7 @@ def get_optimized_code(c_code: str, function_summary: str, caller_and_callee_sum
                 function_summary=function_summary,
                 caller_and_callee_summary=caller_and_callee_summary,
                 function_sog=function_sog,
+                type_constraints=type_constraints,
                 language=language
             )
             optimized_code = llm_interface.generate(repair_prompt)
@@ -395,6 +473,8 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
         f_data['f_name'] = function_name
         f_data['asm'] = data['asm']
         f_data['ghidra_code'] = data['ghidra_pseudo']
+        f_data['type_constraints'] = get_type_constraints(data)
+
         
         # Get SOG
         sog_path = cfg_map.get(function_name)
@@ -455,6 +535,7 @@ def batch_optimize_functions(enriched_programs: List[Dict]) -> List[Dict]:
                 function_summary=func_data['function_summary'],
                 caller_and_callee_summary=gen_context_summary(prog_data['callgraph']),
                 function_sog="",
+                type_constraints=func_data['type_constraints'],
                 language=prog_data.get('language', 'c'),
                 llm_interface=llm_interface,
                 max_iterations=3,

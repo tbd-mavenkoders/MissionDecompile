@@ -12,6 +12,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import threading
+import shutil
 
 c = Compiler()
 
@@ -81,6 +82,7 @@ def acquire_type_constraints(exec_path: Path):
     "TypeForge.java",
     f"output={str(output_dir)}"
   ]
+  # wait for result to complete before returning
   try:
     result = subprocess.run(command, capture_output=True, text=True, timeout=300)
     if result.returncode != 0:
@@ -89,19 +91,38 @@ def acquire_type_constraints(exec_path: Path):
     else:
       print(f"TypeForge analysis completed for {exec_path.name}")
       return output_dir
+    
+    
+    
   except subprocess.TimeoutExpired:
     print(f"TypeForge analysis timed out for {exec_path.name}")
     return None
       
+    
       
 def process_executables(exec_dir: Path):
   exec_files = list(exec_dir.glob("*.exe"))
+  total = 0
+  success = 0
+  failure = 0
   for exec_file in exec_files:
     output = acquire_type_constraints(exec_file)
-    if output is not None:
-      print(f"Type constraints acquired for {exec_file.name}, output at {output}")
+    if output is None:
+      failure += 1
+      print(f"Skipping cleanup for {exec_file.name} due to analysis failure.")
     else:
-      print(f"Failed to acquire type constraints for {exec_file.name}")
+      success += 1
+      print(f"Successfully processed {exec_file.name}")
+      
+    total += 1
+    print(f"Processed {total} executables: {success} success, {failure} failure.")
+    project_dir = corpus_path / "typeforge" / "project"
+    # delete folder and its contents
+    shutil.rmtree(project_dir, ignore_errors=True)
+    # create empty folder
+    project_dir.mkdir(parents=True, exist_ok=True)
+    
+    
   
         
 def main():
