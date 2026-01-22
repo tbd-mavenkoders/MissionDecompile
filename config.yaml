@@ -85,23 +85,50 @@ prompts:
     - index ; The corpus index of the function.
     - original_code ; The original source code of a function.
     - optimized_code ; The optimized version of the original source code obtained through LLM optimization.
-    - ida_code ; The decompiled code of the function obtained from ida
+    - ghidra_code ; The decompiled code of the function obtained from Ghidra
     - test_code ; The test code to validate the function's correctness.
     - runtime_message ; The runtime error message encountered during execution.
     The original code is built to run with the provided test code, while the optimized code is intended to be as similar in functionality to the original code as possible.
     Your task is to analyze the runtime error message in the context of the provided codes.
-      Create a structured object to identify the error associated with the optimized code and classify it into one of the following phases
-      1. IDA Code Issue; Errors originating from inaccuracies or limitations in IDA's decompilation process / if IDA returns an inaccurate return type / argument type / argument numbers
+      Create a structured JSON object to identify the error associated with the optimized code and classify it into one of the following phases
+      1. Ghidra Code Issue; Errors originating from inaccuracies or limitations in Ghidra's decompilation process / if ghidra returns an inaccurate return type / argument type / argument numbers
       2. LLM Optimization Issue; Errors introduced during the optimization of the original code by the Language Model.
       3. Test Code Issue; Errors stemming from problems within the provided test code itself.
       4. Environment Issue; Errors caused by external factors such as compilation settings, library versions, or system configurations.
       5. Unknown Issue; Errors that cannot be clearly attributed.
-      Create the following fields in the output object
+      The values must only be one of the above five phases, worded exactly as shown.
+    Based on your analysis, Create the following fields in the output object
       - index; The corpus index of the function.
       - a list of errors containing the following fields
         - error; A boolean indicating whether an error was detected (true) or not (false).
         - error_phase; One of the five phases mentioned above.
-        - error_type; A brief description of the specific type of error encountered (e.g., segmentation fault, null pointer dereference, out of bounds access, infinite loop, type mismatch etc.).
+        - error_type; The specific type of error encountered. This maybe chosen from the following list of errors
+          - segmentation_fault
+          - null_pointer_dereference
+          - buffer_overflow
+          - type_mismatch
+          - incorrect_return_value
+          - infinite_loop
+          - compilation_error
+          - integer_overflow
+          - floating_point_exception
+          - division_by_zero
+          - implicit_type_truncation
+          - signedness_error
+          - logic_error
+          - calling_convention_mismatch
+          - argument_order_mismatch
+          - argument_count_mismatch
+          - struct_layout_mismatch
+          - decompilation_inaccuracy
+          - incorrect_function_signature
+          - incorrect_return_type_inference
+          - incorrect_argument_type_inference
+          - incorrect_argument_number_inference
+          - misidentified_library_function
+          - missing_include
+          - assertion_failure
+          - other_runtime_error
         - if the error_type is of type_mismatch, then include an object named type_mismatch_details, which is a list containing an object with the following fields
           - expected_type; The type that was expected (obtained from the original code or test code).
           - actual_type; The type that was found (obtained from the optimized code).
@@ -109,5 +136,4 @@ prompts:
           - code_snippet; A small snippet of code (2-3 lines) from the optimized code where the type mismatch occurred.
         - error_summary; A concise summary of the error and its likely cause.
       Only return the structured object without any additional commentary or explanation.
-    
 
