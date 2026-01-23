@@ -1,16 +1,16 @@
 paths:
-  ghidra_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
-  postscript_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/DecLLMv2/ghidra/decompile.py
-  ghidra_root_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC
-  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/src/scripts
+  ghidra_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
+  postscript_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra/decompile.py
+  ghidra_root_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC
+  scripts_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v5-KB/MissionDecompile/src/scripts
 
 humaneval:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/humaneval-decompile
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v5-KB/MissionDecompile/data/humaneval-decompile
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v5-KB/MissionDecompile/output/humaneval-decompile
 
 exebench:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/data/exebench
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/exebench
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v5-KB/MissionDecompile/data/exebench
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v5-KB/MissionDecompile/output/exebench
 
 
 llm:
@@ -23,7 +23,11 @@ llm:
   vllm_provider: vllm
   vllm_model_name: openai/gpt-oss-20b
   vllm_temperature: 0.3
-  vllm_base_url: http://192.168.41.119:10011
+  vllm_base_url: http://192.168.41.119:8000
+
+kb:
+  api_url: http://localhost:8002
+  retrieval_k: 3
 
 
 
@@ -81,6 +85,42 @@ prompts:
 
 
   summary_prompt: Summarize the provided function in no less than 45 words. Do not return more than 70 words. Focus on the function's purpose and key operations. Avoid implementation details. Use clear, concise language suitable for a technical audience. Only return the summary text without additional commentary.
+
+  judge_prompt: |
+    You are an expert code reviewer for decompiled code. Your task is to evaluate the correctness of decompiled code in two dimensions:
+
+    1. **Type Correctness**: Check if the types used (return types, argument types, variable types) match typical C/C++ conventions and are consistent with similar patterns from the knowledge base examples.
+    2. **Logical Correctness**: Check if the code logic matches the assembly instructions and is semantically equivalent to what the binary actually does.
+
+    ### Evaluation Task:
+    Evaluate the target code and return ONLY a JSON object with this exact format:
+    {
+        "types_correct": true/false,
+        "logic_correct": true/false,
+        "feedback": "Brief explanation of issues found, or 'Looks good' if none"
+    }
+
+    Focus on:
+    - Type correctness: Are pointer types, integer sizes, return types appropriate? Do they match the KB examples?
+    - Logic correctness: Does the flow match the assembly? Are operations semantically equivalent?
+    - Compare with KB examples to ensure consistency in type choices
+
+    Return ONLY the JSON, nothing else.
+
+  semantic_fix_prompt: |
+    The following code compiles successfully but has semantic issues identified by expert review.
+    Your task is to fix these semantic issues while maintaining compilability.
+
+    **Rules:**
+    1. Fix ONLY the semantic issues mentioned in the feedback
+    2. Do NOT break compilation - the code must still compile
+    3. Focus on:
+       - Correcting types (pointer depth, integer sizes, signedness)
+       - Fixing logical errors (off-by-one, wrong conditions, incorrect operations)
+       - Matching patterns from the KB reference examples
+    4. Output ONLY the corrected code, no explanations
+
+    Reference the KB examples provided to ensure your fixes match established patterns for similar assembly code.
 
   analysis_prompt: You are given an object containing the following fields
     - index ; The corpus index of the function.

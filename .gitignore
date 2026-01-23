@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Generated Data (TypeForge outputs - thousands of files)
+data/humaneval-decompile/typeforge/
+
+# Executables
+data/humaneval-decompile/executables/
+
+# Generated Outputs
+output/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+.DS_Store
+Thumbs.db

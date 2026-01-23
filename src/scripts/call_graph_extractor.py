@@ -1,6 +1,7 @@
 # Jython script for Ghidra 11.0.3  
 from ghidra.program.model.listing import FunctionManager 
 import os 
+import sys
 
 
   
@@ -21,7 +22,12 @@ def get_call_graph():
   
 # Export to DOT  
 def export_to_dot(call_graph, output_dir, program):
-  output_path = os.path.join(output_dir, program.getName(), "call_graph.dot")
+  # Create subdirectory for this program
+  program_dir = os.path.join(output_dir, program.getName())
+  if not os.path.exists(program_dir):
+    os.makedirs(program_dir)
+  
+  output_path = os.path.join(program_dir, "call_graph.dot")
   with open(output_path, 'w') as f:  
     f.write('digraph CallGraph {\n')  
     for caller, data in call_graph.items():  
@@ -31,4 +37,6 @@ def export_to_dot(call_graph, output_dir, program):
   
 # Execute  
 call_graph = get_call_graph()  
-export_to_dot(call_graph, "/workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v1-MissionDecompile/MissionDecompile/output/humaneval-decompile/SOG", currentProgram)
+# Read output_dir from command-line argument (passed via -postScript)
+output_dir = sys.argv[1] if len(sys.argv) > 1 else "/tmp"
+export_to_dot(call_graph, output_dir, currentProgram)
