@@ -1,5 +1,55 @@
-data/
-output/
-**/__pycache__/
-.venv/
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+
+# Virtual environments
 venv/
+.venv/
+env/
+ENV/
+.Python
+
+# Output and data directories
+output/
+logs/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+tests/v6_integration/outputs/*
+!tests/v6_integration/outputs/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compiled binaries
+*.out
+*.o
+*.bin
+*.exe
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# MissionDecompile specific
+data/humaneval-decompile/*.c
+data/humaneval-decompile/*.cpp
+data/exebench/*
+!data/humaneval-decompile/humaneval-decompile.json
+!data/exebench/README.md

@@ -1,0 +1,59 @@
+Loading config from: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/config.yaml
+V6 Pipeline Test - 10 C + 10 C++
+==================================================
+VexHelix: healthy
+Testing 10 C + 10 C++ samples
+==================================================
+INFO - Compiling /tmp/tmp1r6dgmw2/s656/orig.c to /tmp/tmp1r6dgmw2/s656/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s658/orig.c to /tmp/tmp1r6dgmw2/s658/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s657/orig.c to /tmp/tmp1r6dgmw2/s657/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s660/orig.c to /tmp/tmp1r6dgmw2/s660/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s659/orig.c to /tmp/tmp1r6dgmw2/s659/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s662/orig.c to /tmp/tmp1r6dgmw2/s662/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s661/orig.c to /tmp/tmp1r6dgmw2/s661/orig.bin
+INFO - Compiling /tmp/tmp1r6dgmw2/s663/orig.c to /tmp/tmp1r6dgmw2/s663/orig.bin
+[✓] 656 (c): equivalent (1it, 1vex, 45.1s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s664/orig.c to /tmp/tmp1r6dgmw2/s664/orig.bin
+[✓] 661 (c): equivalent (1it, 1vex, 51.0s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s665/orig.c to /tmp/tmp1r6dgmw2/s665/orig.bin
+[✓] 657 (c): equivalent (2it, 1vex, 64.8s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s0/orig.cpp to /tmp/tmp1r6dgmw2/s0/orig.bin
+[✓] 659 (c): equivalent (1it, 1vex, 65.0s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s1/orig.cpp to /tmp/tmp1r6dgmw2/s1/orig.bin
+[✓] 665 (c): equivalent (1it, 1vex, 15.6s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s2/orig.cpp to /tmp/tmp1r6dgmw2/s2/orig.bin
+[✓] 663 (c): equivalent (1it, 1vex, 72.2s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s3/orig.cpp to /tmp/tmp1r6dgmw2/s3/orig.bin
+[✓] 658 (c): equivalent (1it, 1vex, 74.9s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s4/orig.cpp to /tmp/tmp1r6dgmw2/s4/orig.bin
+[✓] 660 (c): equivalent (2it, 1vex, 79.1s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s5/orig.cpp to /tmp/tmp1r6dgmw2/s5/orig.bin
+[✓] 664 (c): equivalent (2it, 1vex, 34.1s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s6/orig.cpp to /tmp/tmp1r6dgmw2/s6/orig.bin
+[✓] 0 (cpp): equivalent (1it, 1vex, 41.1s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s7/orig.cpp to /tmp/tmp1r6dgmw2/s7/orig.bin
+[✓] 1 (cpp): equivalent (1it, 1vex, 54.1s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s8/orig.cpp to /tmp/tmp1r6dgmw2/s8/orig.bin
+[✓] 5 (cpp): equivalent (1it, 1vex, 45.8s)
+INFO - Compiling /tmp/tmp1r6dgmw2/s9/orig.cpp to /tmp/tmp1r6dgmw2/s9/orig.bin
+[✓] 2 (cpp): equivalent (1it, 1vex, 60.9s)
+[✓] 8 (cpp): equivalent (1it, 1vex, 19.7s)
+[✓] 3 (cpp): equivalent (1it, 1vex, 70.5s)
+[✓] 9 (cpp): equivalent (1it, 1vex, 21.9s)
+[✓] 7 (cpp): equivalent (1it, 1vex, 51.7s)
+[✓] 6 (cpp): equivalent (2it, 1vex, 79.5s)
+[✓] 4 (cpp): equivalent (2it, 2vex, 91.1s)
+[✓] 662 (c): equivalent (2it, 1vex, 208.4s)
+
+==================================================
+SUMMARY
+==================================================
+Equivalent: 20/20 (100%)
+  C: 10/10, C++: 10/10
+Errors: 0
+Timeouts: 0
+Total time: 208.4s (10.4s/sample)
+
+Results: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/tests/v6_integration/outputs/test_results.json
+
+✓ TEST PASSED

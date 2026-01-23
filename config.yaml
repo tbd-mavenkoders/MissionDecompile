@@ -1,16 +1,16 @@
 paths:
-  ghidra_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
-  postscript_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/DecLLMv2/ghidra/decompile.py
-  ghidra_root_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/ghidra_11.0.3_PUBLIC
-  scripts_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v2-DHelix/MissionDecompile/src/scripts
+  ghidra_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
+  postscript_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra/decompile.py
+  ghidra_root_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC
+  scripts_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/src/scripts
 
 humaneval:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v2-DHelix/MissionDecompile/data/humaneval-decompile
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v2-DHelix/MissionDecompile/output/humaneval-decompile
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/data/humaneval-decompile
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/output/humaneval-decompile
 
 exebench:
-  corpus_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v2-DHelix/MissionDecompile/data/exebench
-  output_path: /workspace/home/aiclub1/B220032CS_Jaefar/fyp/repos/ansaf/Experiments/v2-DHelix/MissionDecompile/output/exebench
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/data/exebench
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/output/exebench
 
 
 llm:
@@ -23,7 +23,7 @@ llm:
   vllm_provider: vllm
   vllm_model_name: openai/gpt-oss-20b
   vllm_temperature: 0.3
-  vllm_base_url: http://192.168.41.119:10011
+  vllm_base_url: http://127.0.0.1:8000
 
 
 
@@ -84,7 +84,7 @@ prompts:
 
   semantic_repair:
     You are tasked with fixing logical/semantic errors in decompiled C/C++ code.
-    The D-Helix symbolic execution tool has detected that your current implementation is NOT semantically equivalent to the original binary.
+    The VexHelix symbolic execution tool has detected that your current implementation is NOT semantically equivalent to the original binary.
     This means there exists at least one input where your code produces different output than the original.
     
     Context Provided
@@ -92,8 +92,8 @@ prompts:
     - Original Ghidra Decompilation ; Initial decompiled pseudocode from Ghidra
     - Current Decompiled Code ; Your current (compilable but incorrect) implementation
     - Function Summary ; Natural language description of intended behavior
-    - D-Helix Verification Result ; Proof that semantic equivalence failed (SAT result)
-    - Z3 Counterexample (if available) ; Specific input values that expose the bug
+    - VexHelix Verification Result ; Proof that semantic equivalence failed
+    - Counterexample (if available) ; Specific input values that expose the bug
     
     Your Task
     1. Carefully analyze the counterexample to understand what input causes divergence
