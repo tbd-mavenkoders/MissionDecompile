@@ -417,7 +417,7 @@ def main():
     Main function to process all JSON files in the corpus root directory.
     """
     corpus_file = corpus_path / "humaneval-decompile.json"
-    output_file = output_path / "batched_enriched_humaneval_decompile.json"
+    output_file = output_path / "batched_enriched_humaneval_decompile_v6.json"
     
     stats = process_json_file(corpus_file, output_file)
     

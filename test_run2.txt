@@ -1,0 +1,70 @@
+Loading config from: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/config.yaml
+V6 Pipeline Test - 10 C + 10 C++
+==================================================
+VexHelix: healthy
+Testing C indices 667-676 (10) + C++ indices 11-20 (10)
+==================================================
+INFO - Compiling /tmp/tmpfjo1lsjp/s667/orig.c to /tmp/tmpfjo1lsjp/s667/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s668/orig.c to /tmp/tmpfjo1lsjp/s668/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s669/orig.c to /tmp/tmpfjo1lsjp/s669/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s671/orig.c to /tmp/tmpfjo1lsjp/s671/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s670/orig.c to /tmp/tmpfjo1lsjp/s670/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s672/orig.c to /tmp/tmpfjo1lsjp/s672/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s673/orig.c to /tmp/tmpfjo1lsjp/s673/orig.bin
+INFO - Compiling /tmp/tmpfjo1lsjp/s674/orig.c to /tmp/tmpfjo1lsjp/s674/orig.bin
+[✓] 667 (c): equivalent (1it, 1vex, 21.5s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s675/orig.c to /tmp/tmpfjo1lsjp/s675/orig.bin
+[✓] 668 (c): equivalent (1it, 1vex, 34.7s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s676/orig.c to /tmp/tmpfjo1lsjp/s676/orig.bin
+[✓] 672 (c): equivalent (1it, 1vex, 52.5s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s11/orig.cpp to /tmp/tmpfjo1lsjp/s11/orig.bin
+[✓] 669 (c): equivalent (1it, 1vex, 53.4s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s12/orig.cpp to /tmp/tmpfjo1lsjp/s12/orig.bin
+[✓] 670 (c): equivalent (2it, 1vex, 53.5s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s13/orig.cpp to /tmp/tmpfjo1lsjp/s13/orig.bin
+[✓] 671 (c): equivalent (1it, 1vex, 61.5s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s14/orig.cpp to /tmp/tmpfjo1lsjp/s14/orig.bin
+[✓] 11 (cpp): equivalent (2it, 1vex, 33.4s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s15/orig.cpp to /tmp/tmpfjo1lsjp/s15/orig.bin
+[✓] 676 (c): equivalent (1it, 1vex, 53.8s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s16/orig.cpp to /tmp/tmpfjo1lsjp/s16/orig.bin
+[✓] 12 (cpp): equivalent (1it, 1vex, 44.1s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s17/orig.cpp to /tmp/tmpfjo1lsjp/s17/orig.bin
+[✓] 14 (cpp): equivalent (1it, 1vex, 38.3s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s18/orig.cpp to /tmp/tmpfjo1lsjp/s18/orig.bin
+[✓] 13 (cpp): equivalent (1it, 1vex, 49.4s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s19/orig.cpp to /tmp/tmpfjo1lsjp/s19/orig.bin
+[✓] 15 (cpp): equivalent (1it, 1vex, 71.0s)
+INFO - Compiling /tmp/tmpfjo1lsjp/s20/orig.cpp to /tmp/tmpfjo1lsjp/s20/orig.bin
+[✓] 20 (cpp): equivalent (1it, 1vex, 57.5s)
+[✗] 673 (c): stagnant_6div (6it, 5vex, 383.0s)
+[✗] 674 (c): stagnant_6div (5it, 5vex, 397.1s)
+[✗] 17 (cpp): stagnant_6div (6it, 5vex, 339.6s)
+[✗] 16 (cpp): stagnant_30div (5it, 5vex, 357.8s)
+[✗] 19 (cpp): stagnant_51div (6it, 5vex, 460.9s)
+[✗] 675 (c): stagnant_5div (9it, 6vex, 564.8s)
+[✗] 18 (cpp): stagnant_5div (9it, 9vex, 578.7s)
+
+==================================================
+SUMMARY
+==================================================
+Equivalent: 13/20 (65%)
+  C: 7/10, C++: 6/10
+Stagnant (early exit): 7
+Errors: 0
+Timeouts: 0
+Max iters: 0
+Total time: 678.6s (33.9s/sample)
+
+Results: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/tests/v6_integration/outputs/test_results.json
+
+✗ TEST FAILED (need 80%, got 65%)
+
+Failed samples:
+  [673] c: stagnant_6div - Stuck at 6 divergences
+  [674] c: stagnant_6div - Stuck at 6 divergences
+  [17] cpp: stagnant_6div - Stuck at 6 divergences
+  [16] cpp: stagnant_30div - Stuck at 30 divergences
+  [19] cpp: stagnant_51div - Stuck at 51 divergences
+  [675] c: stagnant_5div - Stuck at 5 divergences
+  [18] cpp: stagnant_5div - Stuck at 5 divergences

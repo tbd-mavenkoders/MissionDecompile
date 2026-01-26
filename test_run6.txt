@@ -1,0 +1,63 @@
+Loading config from: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/config.yaml
+V6 Pipeline Test - 10 C + 10 C++ (Streaming Pool)
+==================================================
+VexHelix: healthy
+Testing C indices 667-676 (10) + C++ indices 11-20 (10)
+Pool size: 16 concurrent workers
+==================================================
+  [START] 667 (c) - active: 1
+  [START] 668 (c) - active: 2
+  [START] 670 (c) - active: 3
+  [START] 669 (c) - active: 4
+INFO - Compiling /tmp/tmpnjn7pfxg/s668/orig.c to /tmp/tmpnjn7pfxg/s668/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s667/orig.c to /tmp/tmpnjn7pfxg/s667/orig.bin
+  [START] 671 (c) - active: 5
+  [START] 672 (c) - active: 6
+INFO - Compiling /tmp/tmpnjn7pfxg/s670/orig.c to /tmp/tmpnjn7pfxg/s670/orig.bin
+  [START] 673 (c) - active: 7
+INFO - Compiling /tmp/tmpnjn7pfxg/s669/orig.c to /tmp/tmpnjn7pfxg/s669/orig.bin
+  [START] 674 (c) - active: 8
+  [START] 675 (c) - active: 9
+INFO - Compiling /tmp/tmpnjn7pfxg/s671/orig.c to /tmp/tmpnjn7pfxg/s671/orig.bin
+  [START] 676 (c) - active: 10
+INFO - Compiling /tmp/tmpnjn7pfxg/s672/orig.c to /tmp/tmpnjn7pfxg/s672/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s673/orig.c to /tmp/tmpnjn7pfxg/s673/orig.bin
+  [START] 11 (cpp) - active: 11
+INFO - Compiling /tmp/tmpnjn7pfxg/s675/orig.c to /tmp/tmpnjn7pfxg/s675/orig.bin
+  [START] 12 (cpp) - active: 12
+INFO - Compiling /tmp/tmpnjn7pfxg/s674/orig.c to /tmp/tmpnjn7pfxg/s674/orig.bin
+  [START] 13 (cpp) - active: 13
+  [START] 14 (cpp) - active: 14
+INFO - Compiling /tmp/tmpnjn7pfxg/s676/orig.c to /tmp/tmpnjn7pfxg/s676/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s11/orig.cpp to /tmp/tmpnjn7pfxg/s11/orig.bin
+  [START] 15 (cpp) - active: 15
+INFO - Compiling /tmp/tmpnjn7pfxg/s12/orig.cpp to /tmp/tmpnjn7pfxg/s12/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s13/orig.cpp to /tmp/tmpnjn7pfxg/s13/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s14/orig.cpp to /tmp/tmpnjn7pfxg/s14/orig.bin
+  [START] 16 (cpp) - active: 16
+INFO - Compiling /tmp/tmpnjn7pfxg/s15/orig.cpp to /tmp/tmpnjn7pfxg/s15/orig.bin
+INFO - Compiling /tmp/tmpnjn7pfxg/s16/orig.cpp to /tmp/tmpnjn7pfxg/s16/orig.bin
+[✓] 11 (cpp): equivalent (1it, 1vex, 27.0s) | done: 1, active: 15
+  [START] 17 (cpp) - active: 16
+INFO - Compiling /tmp/tmpnjn7pfxg/s17/orig.cpp to /tmp/tmpnjn7pfxg/s17/orig.bin
+[✓] 667 (c): equivalent (1it, 1vex, 28.9s) | done: 2, active: 15
+  [START] 18 (cpp) - active: 16
+INFO - Compiling /tmp/tmpnjn7pfxg/s18/orig.cpp to /tmp/tmpnjn7pfxg/s18/orig.bin
+[✓] 668 (c): equivalent (2it, 1vex, 53.0s) | done: 3, active: 15
+  [START] 19 (cpp) - active: 16
+INFO - Compiling /tmp/tmpnjn7pfxg/s19/orig.cpp to /tmp/tmpnjn7pfxg/s19/orig.bin
+[✓] 12 (cpp): equivalent (1it, 1vex, 55.0s) | done: 4, active: 15
+  [START] 20 (cpp) - active: 16
+INFO - Compiling /tmp/tmpnjn7pfxg/s20/orig.cpp to /tmp/tmpnjn7pfxg/s20/orig.bin
+[✓] 672 (c): equivalent (1it, 1vex, 82.0s) | done: 5, active: 15
+[✓] 671 (c): equivalent (2it, 1vex, 123.6s) | done: 6, active: 14
+[✓] 674 (c): equivalent (1it, 1vex, 124.8s) | done: 7, active: 13
+[✓] 673 (c): equivalent (1it, 1vex, 127.2s) | done: 8, active: 12
+[✓] 676 (c): equivalent (1it, 1vex, 152.3s) | done: 9, active: 11
+[✓] 15 (cpp): equivalent (2it, 1vex, 157.6s) | done: 10, active: 10
+[✓] 669 (c): equivalent (1it, 1vex, 166.5s) | done: 11, active: 9
+[✓] 14 (cpp): equivalent (1it, 1vex, 168.4s) | done: 12, active: 8
+[✓] 675 (c): equivalent (2it, 1vex, 169.3s) | done: 13, active: 7
+[✓] 13 (cpp): equivalent (1it, 1vex, 174.2s) | done: 14, active: 6
+[✓] 670 (c): equivalent (3it, 2vex, 226.5s) | done: 15, active: 5
+[✓] 20 (cpp): equivalent (1it, 1vex, 172.7s) | done: 16, active: 4

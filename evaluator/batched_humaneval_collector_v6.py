@@ -65,26 +65,45 @@ llm_interface = create_llm_interface(
 corpus_path = Path(config["humaneval"]["corpus_path"])
 output_dir = Path(config["humaneval"]["output_path"])
 
+# Thread-safe progress tracking (like test_pipeline_20.py)
+print_lock = threading.Lock()
+active_count = 0
+completed_count = 0
+total_tasks = 0
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-# Batching configuration
-COMPILATION_BATCH_SIZE = 20
-GHIDRA_BATCH_SIZE = 12
-LLM_BATCH_SIZE = 8
+# PIPELINE STAGE WIDTHS (like CPU pipeline - each stage has its own parallelism)
+# Items flow through: COMPILE → GHIDRA → SUMMARY → VEXHELIX
+# IMPORTANT: LLM can only handle 24 concurrent requests total!
+# Summary uses LLM, VexHelix repair loop uses LLM heavily
+# So we split: 12 for summary + 12 for vexhelix = 24 max LLM concurrency
+PIPELINE_COMPILE_WIDTH = 20   # Compile is fast (gcc subprocess)
+PIPELINE_GHIDRA_WIDTH = 12     # Ghidra is memory-heavy, limit parallelism
+PIPELINE_SUMMARY_WIDTH = 12   # LLM bound: 12 concurrent summary requests
+PIPELINE_VEXHELIX_WIDTH = 12  # LLM bound: 12 concurrent repair loops (each uses LLM)
 
-# Concurrent static repair configuration (NEW in v6)
-CONCURRENT_REPAIR_SIZE = 16  # Number of testcases to repair concurrently
+# Legacy batching configuration (used by non-pipelined functions)
+COMPILATION_BATCH_SIZE = 20
+GHIDRA_BATCH_SIZE = 8
+LLM_BATCH_SIZE = 12  # Match pipeline summary width
+
+# Concurrent static repair configuration (legacy, not used in pipelined mode)
+CONCURRENT_REPAIR_SIZE = 12  # Match pipeline vexhelix width
 
 # VexHelix API configuration (replaces D-Helix)
 VEXHELIX_API_URL = "http://127.0.0.1:8001"
-VEXHELIX_TIMEOUT = 120  # seconds per verification (reduced for efficiency)
+VEXHELIX_TIMEOUT = 180  # seconds per verification (increased for complex functions)
 VEXHELIX_LOOP_BOUND = 5  # Maximum loop iterations in symbolic execution
+VEXHELIX_RETRIES = 3  # Number of retries for transient failures
 
 # Repair configuration
-MAX_REPAIR_ITERATIONS = 15  # Total iterations including static + semantic repair
+MAX_REPAIR_ITERATIONS = 7  # Reduced from 15 - better prompts need fewer iterations
 MAX_STATIC_REPAIR_PER_CYCLE = 3  # Max static repair attempts before checking semantics
+MAX_STAGNANT_ITERATIONS = 4  # Early exit if divergence count doesn't improve
+PARALLEL_REPAIR_WORKERS = 12  # Match pipeline vexhelix width (LLM bound)
 
 # Token limit configuration (GPT-OSS-20B has 130K context)
 MAX_CONTEXT_TOKENS = 130_000
@@ -174,6 +193,8 @@ def call_vexhelix_api(
     Unlike D-Helix (KLEE-based), it compiles the decompiled code and compares
     both binaries side-by-side.
     
+    IMPROVED in v6: Retry logic with exponential backoff for transient failures.
+    
     Args:
         binary_path: Path to original compiled binary
         decompiled_code: The decompiled/repaired source code
@@ -185,91 +206,103 @@ def call_vexhelix_api(
     Returns:
         VexHelixResult with verification outcome
     """
-    try:
-        lang_str = "cpp" if language.lower() == "cpp" else "c"
-        print(f"[VexHelix] Verifying {function_name} ({lang_str}) against binary {binary_path.name}...")
+    lang_str = "cpp" if language.lower() == "cpp" else "c"
+    last_error = None
+    
+    for attempt in range(VEXHELIX_RETRIES):
+        try:
+            with open(binary_path, 'rb') as binary_file:
+                # VexHelix uses Form fields + File upload (not JSON body)
+                files = {
+                    'original_binary': (binary_path.name, binary_file, 'application/octet-stream')
+                }
+                data = {
+                    'decompiled_code': decompiled_code,
+                    'function_name': function_name,
+                    'language': lang_str,
+                    'num_args': str(num_args),
+                    'loop_bound': str(VEXHELIX_LOOP_BOUND),
+                    'timeout': str(VEXHELIX_TIMEOUT)
+                }
+                
+                response = requests.post(
+                    f"{VEXHELIX_API_URL}/verify",
+                    files=files,
+                    data=data,
+                    timeout=VEXHELIX_TIMEOUT + 30  # Extra buffer for network
+                )
+            
+            if response.status_code == 200:
+                result = response.json()
+                status = result.get('status', 'error')
+                equivalent = result.get('equivalent', None)
+                
+                # Map VexHelix status to our result
+                if status == 'equivalent':
+                    print(f"[VexHelix] ✓✓✓ EQUIVALENT - Semantic match!")
+                elif status == 'different':
+                    div_count = len(result.get('divergences', []))
+                    print(f"[VexHelix] ✗ DIFFERENT - Found {div_count} divergence(s)")
+                elif status == 'timeout':
+                    print(f"[VexHelix] ⏱ TIMEOUT - Execution exceeded time limit")
+                elif status == 'error':
+                    print(f"[VexHelix] ⚠ ERROR - {result.get('message', 'Unknown error')}")
+                
+                return VexHelixResult(
+                    success=True,
+                    status=status,
+                    equivalent=equivalent,
+                    divergences=result.get('divergences'),
+                    statistics=result.get('statistics'),
+                    error_message=result.get('message') if status == 'error' else None,
+                    compilation_error=result.get('compilation_error')
+                )
+            else:
+                last_error = f"HTTP {response.status_code}: {response.text[:500]}"
+                print(f"[VexHelix] Error: {last_error}")
+                if response.status_code >= 500:  # Server error, retry
+                    print(f"[VexHelix] Server error (attempt {attempt + 1}/{VEXHELIX_RETRIES}), retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                # Client error (4xx), don't retry
+                return VexHelixResult(
+                    success=False,
+                    status='error',
+                    equivalent=None,
+                    divergences=None,
+                    statistics=None,
+                    error_message=last_error,
+                    compilation_error=None
+                )
         
-        with open(binary_path, 'rb') as binary_file:
-            # VexHelix uses Form fields + File upload (not JSON body)
-            files = {
-                'original_binary': (binary_path.name, binary_file, 'application/octet-stream')
-            }
-            data = {
-                'decompiled_code': decompiled_code,
-                'function_name': function_name,
-                'language': lang_str,
-                'num_args': str(num_args),
-                'loop_bound': str(VEXHELIX_LOOP_BOUND),
-                'timeout': str(VEXHELIX_TIMEOUT)
-            }
-            
-            response = requests.post(
-                f"{VEXHELIX_API_URL}/verify",
-                files=files,
-                data=data,
-                timeout=VEXHELIX_TIMEOUT + 30  # Extra buffer for network
-            )
-        
-        if response.status_code == 200:
-            result = response.json()
-            status = result.get('status', 'error')
-            equivalent = result.get('equivalent', None)
-            
-            # Map VexHelix status to our result
-            if status == 'equivalent':
-                print(f"[VexHelix] ✓✓✓ EQUIVALENT - Semantic match!")
-            elif status == 'different':
-                div_count = len(result.get('divergences', []))
-                print(f"[VexHelix] ✗ DIFFERENT - Found {div_count} divergence(s)")
-            elif status == 'timeout':
-                print(f"[VexHelix] ⏱ TIMEOUT - Execution exceeded time limit")
-            elif status == 'error':
-                print(f"[VexHelix] ⚠ ERROR - {result.get('message', 'Unknown error')}")
-            
-            return VexHelixResult(
-                success=True,
-                status=status,
-                equivalent=equivalent,
-                divergences=result.get('divergences'),
-                statistics=result.get('statistics'),
-                error_message=result.get('message') if status == 'error' else None,
-                compilation_error=result.get('compilation_error')
-            )
-        else:
-            error_msg = f"HTTP {response.status_code}: {response.text[:500]}"
-            print(f"[VexHelix] Error: {error_msg}")
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last_error = str(e)[:200]
+            if attempt < VEXHELIX_RETRIES - 1:
+                print(f"[VexHelix] Connection error (attempt {attempt + 1}/{VEXHELIX_RETRIES}), retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                continue
+        except Exception as e:
             return VexHelixResult(
                 success=False,
                 status='error',
                 equivalent=None,
                 divergences=None,
                 statistics=None,
-                error_message=error_msg,
+                error_message=str(e)[:200],
                 compilation_error=None
             )
     
-    except requests.exceptions.Timeout:
-        print(f"[VexHelix] Timeout after {VEXHELIX_TIMEOUT}s")
-        return VexHelixResult(
-            success=False,
-            status='timeout',
-            equivalent=None,
-            divergences=None,
-            statistics=None,
-            error_message=f"Request timeout after {VEXHELIX_TIMEOUT}s",
-            compilation_error=None
-        )
-    except Exception as e:
-        print(f"[VexHelix] Exception: {e}")
-        return VexHelixResult(
-            success=False,
-            status='error',
-            equivalent=None,
-            divergences=None,
-            statistics=None,
-            error_message=str(e),
-            compilation_error=None
-        )
+    # All retries exhausted
+    print(f"[VexHelix] Failed after {VEXHELIX_RETRIES} retries: {last_error}")
+    return VexHelixResult(
+        success=False,
+        status='error',
+        equivalent=None,
+        divergences=None,
+        statistics=None,
+        error_message=f"Failed after {VEXHELIX_RETRIES} retries: {last_error}",
+        compilation_error=None
+    )
 
 
 # =============================================================================
@@ -277,10 +310,45 @@ def call_vexhelix_api(
 # =============================================================================
 
 def get_initial_prompt(c_code: str, function_summary: str, caller_and_callee_summary: str, 
-                      function_sog: str, language: str) -> str:
-    """Generate the initial prompt for the repair tool."""
+                      function_sog: str, language: str, asm: str = "") -> str:
+    """
+    Generate the initial prompt for the repair tool.
+    
+    IMPROVED in v6: Includes assembly as ground truth with Ghidra warning.
+    The LLM should prioritize assembly over Ghidra when they conflict.
+    """
     initial_prompt = config["prompts"]["system_prompt"]
-    prompt = f"{initial_prompt}\n\n```Language:{language}\nSummary:{function_summary}\n{c_code}\n```"
+    
+    # Truncate assembly but keep enough for context
+    truncated_asm = asm[:5000] if asm else ""
+    if len(asm) > 5000:
+        truncated_asm += "\n; ... (truncated)"
+    
+    prompt = f"""{initial_prompt}
+
+IMPORTANT: Ghidra's decompilation may have errors. The assembly shows the true behavior.
+Common Ghidra mistakes:
+- Wrong return types (void instead of float/int)
+- Missing float operations (addss, mulss, divss instructions ignored)
+- Empty loop bodies (operations inside loops omitted)
+- Wrong parameter types (long instead of float*)
+
+If Ghidra shows 'void' but assembly uses xmm0 for return, the function returns float/double.
+If assembly has addss/subss/mulss/divss, the code MUST have float arithmetic.
+
+Assembly (ground truth - this is what the binary ACTUALLY does):
+```asm
+{truncated_asm}
+```
+
+Ghidra decompilation (may be incorrect - use as rough guide):
+```{language}
+{c_code}
+```
+
+Function Summary: {function_summary}
+"""
+    
     if caller_and_callee_summary:
         prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
     if function_sog:
@@ -317,59 +385,86 @@ def get_semantic_repair_prompt(
     language: str
 ) -> str:
     """
-    Generate semantic repair prompt using VexHelix verification results.
+    Generate robust semantic repair prompt - assembly is ground truth, Ghidra is unreliable.
     
-    VexHelix provides:
-    - Divergence information with concrete counterexample inputs
-    - Execution statistics
+    IMPROVED in v6: Detailed guidance on common Ghidra mistakes and how to fix them.
+    This prompt is critical for recovering from Ghidra decompilation failures.
     """
-    semantic_prompt = config["prompts"]["semantic_repair"]
-    
-    prompt = f"{semantic_prompt}\n\n"
-    
-    # Add context
-    prompt += f"Language: {language.upper()}\n\n"
-    
-    # Truncate assembly to stay within token limits
-    truncated_asm = original_asm[:MAX_ASM_CHARS]
-    if len(original_asm) > MAX_ASM_CHARS:
+    # Truncate assembly but keep more of it (it's the ground truth!)
+    truncated_asm = original_asm[:6000] if original_asm else ""
+    if len(original_asm) > 6000:
         truncated_asm += "\n; ... (truncated)"
-    prompt += f"Original Assembly Code:\n```asm\n{truncated_asm}\n```\n\n"
     
-    prompt += f"Original Ghidra Decompilation:\n```{language}\n{original_ghidra}\n```\n\n"
+    prompt = f"""You are fixing decompiled code that produces WRONG outputs. The verifier found semantic differences.
+
+CRITICAL: The ASSEMBLY is the ground truth - it shows exactly what the binary does.
+Ghidra's decompilation is OFTEN WRONG and should only be used as a rough guide.
+
+COMMON GHIDRA MISTAKES TO CHECK FOR:
+1. WRONG RETURN TYPE: Ghidra often shows 'void' when the function actually returns int/float/double
+   - Look for floating-point instructions (movss, movsd, addss, mulss, divss, cvtsi2ss, etc.) → function likely returns float
+   - Look for xmm0 being set before ret → return value is in xmm0 (float/double)
+   - Look for eax/rax being set before ret → return value is int/long
+2. MISSING FLOATING-POINT OPERATIONS: Ghidra sometimes omits float math entirely
+   - If asm has addss/subss/mulss/divss, the code MUST have float arithmetic
+   - cvtsi2ss = int to float conversion
+   - cvttss2si = float to int conversion
+3. WRONG PARAMETER TYPES: long/int instead of float*, void* instead of actual types
+   - If asm dereferences param and uses movss, it's a float pointer
+4. EMPTY LOOP BODIES: Ghidra sometimes shows loops that do nothing
+   - Check what instructions are INSIDE the loop in assembly
+   - Loops usually accumulate values, check for add/mul instructions with memory operands
+
+ASSEMBLY (GROUND TRUTH - this is what the binary ACTUALLY does):
+```asm
+{truncated_asm}
+```
+
+GHIDRA DECOMPILATION (UNRELIABLE - use as rough guide only):
+```{language}
+{original_ghidra}
+```
+
+YOUR CURRENT CODE (WRONG - produces incorrect output):
+```{language}
+{current_code}
+```
+
+Function Summary: {function_summary}
+
+VERIFICATION RESULT: DIFFERENT (your code doesn't match the binary's behavior)
+"""
     
-    prompt += f"Current Decompiled Code (INCORRECT):\n```{language}\n{current_code}\n```\n\n"
-    
-    prompt += f"Function Summary:\n{function_summary}\n\n"
-    
-    prompt += f"VexHelix Verification Result: DIFFERENT (semantic mismatch detected)\n\n"
-    
-    # Add divergence details if available (VexHelix provides concrete counterexamples)
+    # Format divergences with clear explanation - show more divergences (5 instead of 3)
     if vexhelix_result.divergences:
-        prompt += "Detected Divergences (inputs that cause different outputs):\n"
-        for i, div in enumerate(vexhelix_result.divergences[:3]):  # Limit to 3
-            prompt += f"\nDivergence {i+1}:\n"
+        prompt += "\nCOUNTEREXAMPLES (inputs where your code gives wrong answer):\n"
+        for i, div in enumerate(vexhelix_result.divergences[:5]):
+            prompt += f"\nTest case {i+1}:\n"
             if div.get('inputs'):
-                prompt += "  Input values:\n"
-                for inp in div['inputs']:
-                    prompt += f"    - {inp.get('name', 'arg')}: {inp.get('value', '?')} (hex: {inp.get('hex', '?')})\n"
+                prompt += "  Inputs: "
+                inputs_str = ", ".join([f"{inp.get('name', 'arg')}={inp.get('value', '?')}" for inp in div['inputs']])
+                prompt += inputs_str + "\n"
             if div.get('orig_output'):
-                prompt += f"  Original output: {div['orig_output'].get('value', '?')} (hex: {div['orig_output'].get('hex', '?')})\n"
+                orig = div['orig_output']
+                prompt += f"  Expected (from binary): {orig.get('value', '?')}"
+                if orig.get('hex'):
+                    prompt += f" (0x{orig.get('hex', '?')})"
+                prompt += "\n"
             if div.get('dec_output'):
-                prompt += f"  Your output: {div['dec_output'].get('value', '?')} (hex: {div['dec_output'].get('hex', '?')})\n"
-        prompt += "\n"
+                dec = div['dec_output']
+                prompt += f"  Your output: {dec.get('value', '?')}"
+                if dec.get('hex'):
+                    prompt += f" (0x{dec.get('hex', '?')})"
+                prompt += "\n"
     
-    # Add statistics if available
-    if vexhelix_result.statistics:
-        stats = vexhelix_result.statistics
-        prompt += f"Execution Statistics:\n"
-        prompt += f"  - States explored (original): {stats.get('states_orig', '?')}\n"
-        prompt += f"  - States explored (decompiled): {stats.get('states_dec', '?')}\n"
-        prompt += f"  - Path pairs compared: {stats.get('comparisons_attempted', '?')}\n\n"
-    
-    prompt += "Please provide the corrected function that fixes the logical bug.\n"
-    prompt += "Focus on matching the exact behavior shown in the assembly and Ghidra code.\n"
-    
+    prompt += """
+TASK: Fix your code to match the ASSEMBLY behavior. Steps:
+1. Analyze the assembly to understand what the function REALLY does
+2. Identify where Ghidra went wrong (return type? missing operations? wrong types?)
+3. Rewrite the function based on assembly, using Ghidra only as a loose guide
+4. Make sure your return type and parameter types match what the assembly expects
+
+Output ONLY the corrected function code."""
     return prompt
 
 
@@ -726,7 +821,8 @@ def get_optimized_code_v6(
     function_name: str,
     original_asm: str,
     original_ghidra: str,
-    num_args: int = 3
+    num_args: int = 3,
+    task_id: str = ""
 ) -> Tuple[bool, str, Dict]:
     """
     Enhanced optimization with VexHelix semantic verification.
@@ -735,39 +831,48 @@ def get_optimized_code_v6(
     1. Attempts static repair until code compiles
     2. Verifies semantic equivalence with VexHelix
     3. Performs semantic repair if divergences found
+    4. Early exit if divergence count stagnates (doesn't improve)
     
     Supports both C and C++ (unlike v2 which skipped C++)
     
     Returns:
         (success, optimized_code, stats)
     """
+    prefix = f"[{task_id}]" if task_id else "[Optimize V6]"
+    
     stats = {
         'static_repair_iterations': 0,
         'semantic_repair_iterations': 0,
         'vexhelix_calls': 0,
         'vexhelix_equivalent_achieved': False,
         'final_result': None,
-        'language': language
+        'language': language,
+        'divergence_history': []  # Track divergence counts
     }
+    
+    # Track divergence improvement
+    best_divergence_count = float('inf')
+    stagnant_count = 0
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Initial LLM prompt
-        print(f"[Optimize V6] Starting optimization for {function_name} ({language})...")
+        # Initial LLM prompt - NOW INCLUDES ASSEMBLY AS GROUND TRUTH
+        print(f"{prefix} Starting optimization for {function_name} ({language})...", flush=True)
         initial_prompt = get_initial_prompt(
             c_code=c_code,
             function_summary=function_summary,
             caller_and_callee_summary=caller_and_callee_summary,
             function_sog=function_sog,
-            language=language
+            language=language,
+            asm=original_asm  # Pass assembly to initial prompt
         )
         
         optimized_code = llm_interface.generate(initial_prompt)
         
         # Main repair loop
         for iteration in range(MAX_REPAIR_ITERATIONS):
-            print(f"\n[Optimize V6] === Iteration {iteration + 1}/{MAX_REPAIR_ITERATIONS} ===")
+            print(f"{prefix} === Iteration {iteration + 1}/{MAX_REPAIR_ITERATIONS} ===")
             
             # Phase 1: Static Repair (ensure compilation)
             compile_success, compile_message, executable_path = compile_code(
@@ -775,7 +880,7 @@ def get_optimized_code_v6(
             )
             
             if not compile_success:
-                print(f"[Static Repair] Code doesn't compile, fixing...")
+                print(f"{prefix} [Static] Code doesn't compile, fixing...")
                 stats['static_repair_iterations'] += 1
                 
                 e = ErrorNormalizer()
@@ -791,14 +896,13 @@ def get_optimized_code_v6(
                 )
                 
                 optimized_code = llm_interface.generate(repair_prompt)
-                print(f"[Static Repair] Received repaired code from LLM")
+                print(f"{prefix} [Static] Received repaired code")
                 continue  # Go back to compilation check
             
-            print(f"[Static Repair] ✓ Code compiles successfully")
+            print(f"{prefix} [Static] ✓ Compiles")
             
             # Phase 2: Semantic Verification (VexHelix)
-            # NOTE: Unlike D-Helix, VexHelix FULLY supports both C and C++
-            print(f"[Semantic Verify] Calling VexHelix API ({language})...")
+            print(f"{prefix} [Semantic] Calling VexHelix...")
             stats['vexhelix_calls'] += 1
             
             vexhelix_result = call_vexhelix_api(
@@ -813,8 +917,7 @@ def get_optimized_code_v6(
             if not vexhelix_result.success and vexhelix_result.status == 'error':
                 # Check if it's a compilation error on VexHelix side
                 if vexhelix_result.compilation_error:
-                    print(f"[Semantic Verify] VexHelix compilation error: {vexhelix_result.compilation_error[:100]}")
-                    # Treat as static repair needed
+                    print(f"{prefix} [Semantic] VexHelix compile error, fixing...")
                     stats['static_repair_iterations'] += 1
                     
                     repair_prompt = get_static_repair_prompt(
@@ -828,25 +931,43 @@ def get_optimized_code_v6(
                     optimized_code = llm_interface.generate(repair_prompt)
                     continue
                 
-                print(f"[Semantic Verify] VexHelix API error: {vexhelix_result.error_message}")
-                print(f"[Semantic Verify] Continuing with compilable code...")
+                print(f"{prefix} [Semantic] VexHelix API error: {vexhelix_result.error_message}")
                 stats['final_result'] = 'vexhelix_error'
                 return True, optimized_code, stats
             
             if vexhelix_result.status == 'timeout':
-                print(f"[Semantic Verify] VexHelix timeout - returning compilable code")
+                print(f"{prefix} [Semantic] VexHelix timeout")
                 stats['final_result'] = 'vexhelix_timeout'
                 return True, optimized_code, stats
             
             if vexhelix_result.status == 'equivalent' or vexhelix_result.equivalent:
-                print(f"[Semantic Verify] ✓✓✓ EQUIVALENT - Code is semantically correct!")
+                print(f"{prefix} ✓✓✓ EQUIVALENT!")
                 stats['vexhelix_equivalent_achieved'] = True
                 stats['final_result'] = 'equivalent'
                 return True, optimized_code, stats
             
-            # Phase 3: Semantic Repair (fix logical bugs)
-            print(f"[Semantic Verify] ✗ DIFFERENT - Logical bug detected")
-            print(f"[Semantic Repair] Attempting to fix logical errors...")
+            # Phase 3: Check for stagnation
+            current_divergences = len(vexhelix_result.divergences or [])
+            stats['divergence_history'].append(current_divergences)
+            print(f"{prefix} [Semantic] ✗ DIFFERENT - {current_divergences} divergences")
+            
+            # Check if improving
+            if current_divergences < best_divergence_count:
+                best_divergence_count = current_divergences
+                stagnant_count = 0
+                print(f"{prefix} [Semantic] Improvement! Best so far: {best_divergence_count}")
+            else:
+                stagnant_count += 1
+                print(f"{prefix} [Semantic] No improvement ({stagnant_count}/{MAX_STAGNANT_ITERATIONS})")
+                
+                if stagnant_count >= MAX_STAGNANT_ITERATIONS:
+                    print(f"{prefix} [Semantic] ⚠ Stagnation detected - early exit")
+                    print(f"{prefix} Divergence history: {stats['divergence_history']}")
+                    stats['final_result'] = 'stagnant_divergences'
+                    return True, optimized_code, stats
+            
+            # Phase 4: Semantic Repair
+            print(f"{prefix} [Semantic] Attempting fix...")
             stats['semantic_repair_iterations'] += 1
             
             semantic_prompt = get_semantic_repair_prompt(
@@ -859,13 +980,12 @@ def get_optimized_code_v6(
             )
             
             optimized_code = llm_interface.generate(semantic_prompt)
-            print(f"[Semantic Repair] Received semantically repaired code from LLM")
-            # Loop will now re-check compilation and semantics
+            print(f"{prefix} [Semantic] Received repaired code")
         
         # Max iterations reached
-        print(f"[Optimize V6] Max iterations ({MAX_REPAIR_ITERATIONS}) reached")
+        print(f"{prefix} Max iterations ({MAX_REPAIR_ITERATIONS}) reached")
+        print(f"{prefix} Divergence history: {stats['divergence_history']}")
         
-        # Do final check
         compile_success, _, _ = compile_code(optimized_code, language, temp_path)
         
         if compile_success:
@@ -939,21 +1059,33 @@ def split_enrichment(data: Dict, ghidra_result: Dict, original_binary_path: Path
 
 
 # =============================================================================
-# BATCH OPTIMIZATION WITH CONCURRENT REPAIR
+# BATCH OPTIMIZATION WITH STREAMING PARALLEL REPAIR
 # =============================================================================
 
 def batch_optimize_functions_v6(enriched_programs: List[Dict]) -> List[Dict]:
     """
-    Optimize multiple functions using batched LLM calls with VexHelix verification.
+    Optimize multiple functions using STREAMING PARALLEL repair loops with VexHelix verification.
     
-    Key improvements in v6:
-    - Concurrent static repair for multiple programs
+    IMPROVED in v6 (from test_pipeline_20.py learnings):
+    - TRUE STREAMING parallelism: tasks start immediately as slots free up
+    - Thread-safe progress tracking with print_lock
+    - 24 concurrent workers (matching VexHelix worker pool)
     - Full C++ support via VexHelix
+    - Early exit on stagnant divergences
     - Better counterexample utilization
+    - Assembly included in initial prompt as ground truth
     """
-    print(f"\n[Batch Optimize V6] Starting optimization of {len(enriched_programs)} programs...")
+    global active_count, completed_count, total_tasks
     
-    # Step 1: Batch generate summaries
+    print(f"\n{'='*70}")
+    print(f"[Batch Optimize V6] Starting STREAMING PARALLEL optimization")
+    print(f"[Batch Optimize V6] Programs: {len(enriched_programs)}")
+    print(f"[Batch Optimize V6] Concurrent workers: {PARALLEL_REPAIR_WORKERS}")
+    print(f"[Batch Optimize V6] Max iterations: {MAX_REPAIR_ITERATIONS}")
+    print(f"[Batch Optimize V6] Stagnation limit: {MAX_STAGNANT_ITERATIONS}")
+    print(f"{'='*70}")
+    
+    # Step 1: Batch generate summaries first (this is fast)
     summary_prompts = []
     for prog_idx, prog_data in enumerate(enriched_programs):
         for func_data in prog_data['functions']:
@@ -972,13 +1104,47 @@ def batch_optimize_functions_v6(enriched_programs: List[Dict]) -> List[Dict]:
         for func_data in prog_data['functions']:
             func_data['function_summary'] = summaries.get(prog_idx, "")
     
-    # Step 3: Optimize with VexHelix verification
-    # Note: Semantic verification must be sequential due to VexHelix resource constraints
+    # Step 3: Build list of tasks for parallel execution
+    optimization_tasks = []
     for prog_idx, prog_data in enumerate(enriched_programs):
         for func_data in prog_data['functions']:
-            lang = prog_data.get('language', 'c')
-            print(f"\n[Batch Optimize V6] Processing function {func_data['f_name']} ({lang}) in program {prog_idx}...")
-            
+            task = {
+                'prog_idx': prog_idx,
+                'prog_data': prog_data,
+                'func_data': func_data,
+                'task_id': f"P{prog_data.get('index', prog_idx)}"
+            }
+            optimization_tasks.append(task)
+    
+    total_tasks = len(optimization_tasks)
+    active_count = 0
+    completed_count = 0
+    
+    print(f"\n[Streaming] Prepared {total_tasks} optimization tasks")
+    print(f"[Streaming] Starting streaming execution...\n")
+    
+    # Step 4: Run full repair loops in STREAMING parallel
+    results_map = {}  # Map prog_idx -> result
+    
+    def run_single_optimization(task):
+        """Run a single full optimization loop with progress tracking."""
+        global active_count, completed_count
+        
+        prog_data = task['prog_data']
+        func_data = task['func_data']
+        prog_idx = task['prog_idx']
+        task_id = task['task_id']
+        lang = prog_data.get('language', 'c')
+        idx = prog_data.get('index', prog_idx)
+        
+        # Track active count
+        with print_lock:
+            active_count += 1
+            print(f"  [START] {task_id} ({lang}) idx={idx} - active: {active_count}", flush=True)
+        
+        start_time = time.time()
+        
+        try:
             optimization_success, optimized_code, stats = get_optimized_code_v6(
                 c_code=func_data['ghidra_code'],
                 function_summary=func_data['function_summary'],
@@ -990,31 +1156,752 @@ def batch_optimize_functions_v6(enriched_programs: List[Dict]) -> List[Dict]:
                 function_name=func_data['f_name'],
                 original_asm=func_data.get('asm', ''),
                 original_ghidra=func_data['ghidra_code'],
-                num_args=3  # Default, could be parsed from signature
+                num_args=3,
+                task_id=task_id
+            )
+            
+            duration = time.time() - start_time
+            stats['duration'] = duration
+            
+            # Update progress with thread safety
+            with print_lock:
+                active_count -= 1
+                completed_count += 1
+                status = stats.get('final_result', 'unknown')
+                sym = "✓" if status == 'equivalent' else "✗"
+                print(f"[{sym}] {task_id} ({lang}): {status} "
+                      f"({stats.get('semantic_repair_iterations', 0)}it, "
+                      f"{stats.get('vexhelix_calls', 0)}vex, {duration:.1f}s) | "
+                      f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+            
+            return {
+                'prog_idx': prog_idx,
+                'success': optimization_success,
+                'optimized_code': optimized_code,
+                'stats': stats
+            }
+        except Exception as e:
+            duration = time.time() - start_time
+            with print_lock:
+                active_count -= 1
+                completed_count += 1
+                print(f"[✗] {task_id} ({lang}): exception ({duration:.1f}s) - {str(e)[:100]} | "
+                      f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+            return {
+                'prog_idx': prog_idx,
+                'success': False,
+                'optimized_code': "",
+                'stats': {'final_result': 'exception', 'error': str(e), 'duration': duration}
+            }
+    
+    # Execute in STREAMING parallel with ThreadPoolExecutor
+    # True streaming: completed tasks immediately free slots for new tasks
+    executor = ThreadPoolExecutor(max_workers=PARALLEL_REPAIR_WORKERS)
+    try:
+        # Submit all tasks - executor handles queuing internally
+        futures = {
+            executor.submit(run_single_optimization, task): task
+            for task in optimization_tasks
+        }
+        
+        # Process completions as they arrive (true streaming)
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                prog_idx = result['prog_idx']
+                results_map[prog_idx] = result
+            except Exception as e:
+                task = futures[future]
+                print(f"[ERROR] Task P{task['prog_idx']} future exception: {e}", flush=True)
+    finally:
+        # Shutdown without waiting (all futures already completed)
+        executor.shutdown(wait=False, cancel_futures=True)
+    
+    # Step 5: Update enriched_programs with results
+    for prog_idx, prog_data in enumerate(enriched_programs):
+        result = results_map.get(prog_idx)
+        if result:
+            for func_data in prog_data['functions']:
+                func_data['optimization_status'] = result['success']
+                func_data['optimized_code'] = result['optimized_code']
+                func_data['optimization_stats'] = result['stats']
+        else:
+            for func_data in prog_data['functions']:
+                func_data['optimization_status'] = False
+                func_data['optimized_code'] = ""
+                func_data['optimization_stats'] = {'final_result': 'no_result'}
+    
+    # Print comprehensive summary
+    equivalent_count = sum(1 for r in results_map.values() 
+                          if r['stats'].get('final_result') == 'equivalent')
+    stagnant_count = sum(1 for r in results_map.values() 
+                         if r['stats'].get('final_result') == 'stagnant_divergences')
+    timeout_count = sum(1 for r in results_map.values() 
+                        if r['stats'].get('final_result') == 'vexhelix_timeout')
+    error_count = sum(1 for r in results_map.values() 
+                      if r['stats'].get('final_result') in ('exception', 'vexhelix_error'))
+    max_iter_count = sum(1 for r in results_map.values() 
+                         if 'max_iterations' in str(r['stats'].get('final_result', '')))
+    
+    # Calculate average duration
+    durations = [r['stats'].get('duration', 0) for r in results_map.values() if r['stats'].get('duration')]
+    avg_duration = sum(durations) / len(durations) if durations else 0
+    
+    # Count by language
+    c_equiv = sum(1 for task in optimization_tasks 
+                  if task['prog_data'].get('language') == 'c' 
+                  and results_map.get(task['prog_idx'], {}).get('stats', {}).get('final_result') == 'equivalent')
+    cpp_equiv = sum(1 for task in optimization_tasks 
+                    if task['prog_data'].get('language') == 'cpp' 
+                    and results_map.get(task['prog_idx'], {}).get('stats', {}).get('final_result') == 'equivalent')
+    c_total = sum(1 for task in optimization_tasks if task['prog_data'].get('language') == 'c')
+    cpp_total = sum(1 for task in optimization_tasks if task['prog_data'].get('language') == 'cpp')
+    
+    print(f"\n{'='*70}")
+    print(f"[Batch Optimize V6] STREAMING PARALLEL optimization complete!")
+    print(f"{'='*70}")
+    print(f"  Equivalent: {equivalent_count}/{total_tasks} ({100*equivalent_count/total_tasks:.0f}%)")
+    print(f"    C:   {c_equiv}/{c_total}")
+    print(f"    C++: {cpp_equiv}/{cpp_total}")
+    print(f"  Stagnant (early exit): {stagnant_count}")
+    print(f"  Timeout: {timeout_count}")
+    print(f"  Errors: {error_count}")
+    print(f"  Max iterations: {max_iter_count}")
+    print(f"  Avg time per sample: {avg_duration:.1f}s")
+    print(f"{'='*70}\n")
+    
+    return enriched_programs
+
+
+# =============================================================================
+# PIPELINED ARCHITECTURE - LIKE CPU PIPELINE WITH STAGES AND QUEUES
+# =============================================================================
+# 
+# ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+# │  COMPILE    │──►│   GHIDRA    │──►│  SUMMARIES  │──►│  VEXHELIX   │
+# │  width=20   │   │   width=8   │   │  width=16   │   │  width=24   │
+# └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+#       ↑                 ↑                 ↑                 ↑
+#   compile_q         ghidra_q          summary_q         vexhelix_q
+#
+# Each stage pulls from its input queue, processes, pushes to next queue.
+# Stages run CONCURRENTLY - no waiting for all items to complete a stage!
+# =============================================================================
+
+# Sentinel value to signal stage shutdown
+PIPELINE_DONE = object()
+
+
+def _pipeline_compile_stage(
+    input_q: Queue, 
+    output_q: Queue, 
+    temp_base_dir: Path,
+    dropped_counter: Dict,  # Thread-safe counter for dropped items
+    counter_lock: threading.Lock,
+    stage_id: str = "COMPILE"
+):
+    """Pipeline Stage 1: Compile programs."""
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                data = item
+                idx = data['index']
+                lang = data.get('language', 'c')
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) compiling...", flush=True)
+                
+                result = compile_single_program(data, temp_base_dir)
+                
+                if result.success:
+                    with print_lock:
+                        print(f"[{stage_id}] P{idx} ({lang}) ✓", flush=True)
+                    output_q.put({
+                        'data': data,
+                        'compile_result': result
+                    })
+                else:
+                    with counter_lock:
+                        dropped_counter['compile'] += 1
+                    with print_lock:
+                        print(f"[{stage_id}] P{idx} ({lang}) ✗ compile failed (dropped)", flush=True)
+            except Exception as e:
+                with counter_lock:
+                    dropped_counter['compile'] += 1
+                with print_lock:
+                    print(f"[{stage_id}] P{item.get('index', '?')} exception: {e} (dropped)", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+def _pipeline_ghidra_stage(
+    input_q: Queue, 
+    output_q: Queue, 
+    cfg_script: Path,
+    callgraph_script: Path,
+    dropped_counter: Dict,
+    counter_lock: threading.Lock,
+    stage_id: str = "GHIDRA"
+):
+    """Pipeline Stage 2: Ghidra analysis."""
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                data = item['data']
+                compile_result = item['compile_result']
+                idx = data['index']
+                lang = data.get('language', 'c')
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) analyzing...", flush=True)
+                
+                ghidra_result = analyze_single_executable(
+                    idx, 
+                    compile_result.executable_path, 
+                    cfg_script, 
+                    callgraph_script
+                )
+                
+                if ghidra_result is not None:
+                    with print_lock:
+                        print(f"[{stage_id}] P{idx} ({lang}) ✓", flush=True)
+                    output_q.put({
+                        'data': data,
+                        'compile_result': compile_result,
+                        'ghidra_result': ghidra_result
+                    })
+                else:
+                    with counter_lock:
+                        dropped_counter['ghidra'] += 1
+                    with print_lock:
+                        print(f"[{stage_id}] P{idx} ({lang}) ✗ ghidra failed (dropped)", flush=True)
+            except Exception as e:
+                with counter_lock:
+                    dropped_counter['ghidra'] += 1
+                with print_lock:
+                    print(f"[{stage_id}] P{item['data'].get('index', '?')} exception: {e} (dropped)", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+def _pipeline_summary_stage(
+    input_q: Queue, 
+    output_q: Queue, 
+    dropped_counter: Dict,
+    counter_lock: threading.Lock,
+    stage_id: str = "SUMMARY"
+):
+    """Pipeline Stage 3: LLM summary generation."""
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                data = item['data']
+                compile_result = item['compile_result']
+                ghidra_result = item['ghidra_result']
+                idx = data['index']
+                lang = data.get('language', 'c')
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) generating...", flush=True)
+                
+                # Enrich data with ghidra results
+                enriched_data = split_enrichment(data, ghidra_result, compile_result.executable_path)
+                
+                # Generate summaries for all functions
+                for func_data in enriched_data['functions']:
+                    summary_prompt = config["prompts"]["summary_prompt"]
+                    prompt = f"{summary_prompt}"
+                    if func_data.get('ghidra_code'):
+                        prompt += f"\n\nGhidra Code:\n```c\n{func_data['ghidra_code']}\n```"
+                    if func_data.get('asm'):
+                        prompt += f"\n\nAssembly Instructions:\n{func_data['asm'][:2000]}"
+                    
+                    func_data['function_summary'] = llm_interface.generate(prompt)
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) ✓", flush=True)
+                
+                output_q.put({
+                    'enriched_data': enriched_data,
+                    'lang': lang,
+                    'idx': idx
+                })
+            except Exception as e:
+                with counter_lock:
+                    dropped_counter['summary'] += 1
+                with print_lock:
+                    print(f"[{stage_id}] P{item['data'].get('index', '?')} exception: {e} (dropped)", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+def _pipeline_vexhelix_stage(
+    input_q: Queue, 
+    results: List,
+    results_lock: threading.Lock,
+    counters: Dict,
+    total_tasks: int,
+    stage_id: str = "VEXHELIX"
+):
+    """Pipeline Stage 4: VexHelix semantic repair loop."""
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                enriched_data = item['enriched_data']
+                lang = item['lang']
+                idx = item['idx']
+                task_id = f"P{idx}"
+                
+                with print_lock:
+                    counters['active'] += 1
+                    print(f"[{stage_id}] {task_id} ({lang}) START | active: {counters['active']}", flush=True)
+                
+                start_time = time.time()
+                
+                # Run VexHelix optimization loop for each function
+                for func_data in enriched_data['functions']:
+                    optimization_success, optimized_code, stats = get_optimized_code_v6(
+                        c_code=func_data['ghidra_code'],
+                        function_summary=func_data['function_summary'],
+                        caller_and_callee_summary=gen_context_summary(enriched_data['callgraph']),
+                        function_sog="",
+                        language=lang,
+                        llm_interface=llm_interface,
+                        original_binary_path=Path(enriched_data['original_binary_path']),
+                        function_name=func_data['f_name'],
+                        original_asm=func_data.get('asm', ''),
+                        original_ghidra=func_data['ghidra_code'],
+                        num_args=3,
+                        task_id=task_id
+                    )
+                    
+                    func_data['optimization_status'] = optimization_success
+                    func_data['optimized_code'] = optimized_code
+                    func_data['optimization_stats'] = stats
+                
+                duration = time.time() - start_time
+                final_result = enriched_data['functions'][0].get('optimization_stats', {}).get('final_result', 'unknown') if enriched_data['functions'] else 'no_functions'
+                
+                # Store result
+                with results_lock:
+                    results.append(enriched_data)
+                
+                with print_lock:
+                    counters['active'] -= 1
+                    counters['completed'] += 1
+                    sym = "✓" if final_result == 'equivalent' else "✗"
+                    stats = enriched_data['functions'][0].get('optimization_stats', {}) if enriched_data['functions'] else {}
+                    print(f"[{sym}] {task_id} ({lang}): {final_result} "
+                          f"({stats.get('semantic_repair_iterations', 0)}it, "
+                          f"{stats.get('vexhelix_calls', 0)}vex, {duration:.1f}s) | "
+                          f"done: {counters['completed']}/{total_tasks}, active: {counters['active']}", flush=True)
+                
+            except Exception as e:
+                with print_lock:
+                    counters['active'] -= 1
+                    counters['completed'] += 1
+                    print(f"[✗] P{item.get('idx', '?')} exception: {str(e)[:100]} | "
+                          f"done: {counters['completed']}/{total_tasks}", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+def process_batch_pipelined(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
+    """
+    Process a batch using TRUE PIPELINED ARCHITECTURE.
+    
+    Like a CPU pipeline:
+    - Stage 1 (COMPILE):  width=20, fast
+    - Stage 2 (GHIDRA):   width=8,  memory-heavy
+    - Stage 3 (SUMMARY):  width=16, LLM I/O bound
+    - Stage 4 (VEXHELIX): width=24, verification
+    
+    Items flow through stages via queues. Each stage runs CONCURRENTLY.
+    No waiting for all items to complete a stage before starting the next!
+    
+    Example timeline:
+    t=0:  P0,P1,P2... start compiling
+    t=1:  P0 done compiling → goes to Ghidra | P3,P4... still compiling
+    t=2:  P0 done Ghidra → goes to Summary | P1 enters Ghidra | P5,P6... compiling
+    ...
+    """
+    total = len(batch_items)
+    
+    print(f"\n{'='*70}")
+    print(f"[PIPELINED] TRUE CPU-STYLE PIPELINE ARCHITECTURE")
+    print(f"{'='*70}")
+    print(f"  Total programs: {total}")
+    print(f"  Stage widths:")
+    print(f"    COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
+    print(f"    GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
+    print(f"    SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers")
+    print(f"    VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers")
+    print(f"{'='*70}\n")
+    
+    # Pre-resolve script paths
+    cfg_script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "batched_cfg_extractor.py"
+    callgraph_script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "batched_call_graph_extractor.py"
+    
+    # Create inter-stage queues
+    compile_q = Queue()    # Input to compile stage
+    ghidra_q = Queue()     # compile → ghidra
+    summary_q = Queue()    # ghidra → summary
+    vexhelix_q = Queue()   # summary → vexhelix
+    
+    # Results storage (thread-safe)
+    results = []
+    results_lock = threading.Lock()
+    counters = {'active': 0, 'completed': 0}
+    
+    # Dropped items counter (thread-safe) - items that failed at a stage and won't proceed
+    dropped_counter = {'compile': 0, 'ghidra': 0, 'summary': 0}
+    counter_lock = threading.Lock()
+    
+    # Start stage workers
+    all_threads = []
+    
+    # Stage 1: Compile workers
+    for _ in range(PIPELINE_COMPILE_WIDTH):
+        worker_fn = _pipeline_compile_stage(compile_q, ghidra_q, temp_base_dir, dropped_counter, counter_lock)
+        t = threading.Thread(target=worker_fn, daemon=True)
+        t.start()
+        all_threads.append(('compile', t))
+    
+    # Stage 2: Ghidra workers
+    for _ in range(PIPELINE_GHIDRA_WIDTH):
+        worker_fn = _pipeline_ghidra_stage(ghidra_q, summary_q, cfg_script, callgraph_script, dropped_counter, counter_lock)
+        t = threading.Thread(target=worker_fn, daemon=True)
+        t.start()
+        all_threads.append(('ghidra', t))
+    
+    # Stage 3: Summary workers
+    for _ in range(PIPELINE_SUMMARY_WIDTH):
+        worker_fn = _pipeline_summary_stage(summary_q, vexhelix_q, dropped_counter, counter_lock)
+        t = threading.Thread(target=worker_fn, daemon=True)
+        t.start()
+        all_threads.append(('summary', t))
+    
+    # Stage 4: VexHelix workers
+    for _ in range(PIPELINE_VEXHELIX_WIDTH):
+        worker_fn = _pipeline_vexhelix_stage(vexhelix_q, results, results_lock, counters, total)
+        t = threading.Thread(target=worker_fn, daemon=True)
+        t.start()
+        all_threads.append(('vexhelix', t))
+    
+    # Feed all items into the compile stage
+    for item in batch_items:
+        compile_q.put(item)
+    
+    # Wait for compile stage to drain, then signal shutdown
+    compile_q.join()
+    for _ in range(PIPELINE_COMPILE_WIDTH):
+        compile_q.put(PIPELINE_DONE)
+    
+    # Wait for ghidra stage to drain, then signal shutdown
+    ghidra_q.join()
+    for _ in range(PIPELINE_GHIDRA_WIDTH):
+        ghidra_q.put(PIPELINE_DONE)
+    
+    # Wait for summary stage to drain, then signal shutdown
+    summary_q.join()
+    for _ in range(PIPELINE_SUMMARY_WIDTH):
+        summary_q.put(PIPELINE_DONE)
+    
+    # Wait for vexhelix stage to drain, then signal shutdown
+    vexhelix_q.join()
+    for _ in range(PIPELINE_VEXHELIX_WIDTH):
+        vexhelix_q.put(PIPELINE_DONE)
+    
+    # Wait for all threads to finish
+    for stage_name, t in all_threads:
+        t.join(timeout=5.0)
+    
+    # Print summary
+    total_dropped = dropped_counter['compile'] + dropped_counter['ghidra'] + dropped_counter['summary']
+    equivalent_count = sum(1 for r in results 
+                          if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    
+    c_results = [r for r in results if r.get('language') == 'c']
+    cpp_results = [r for r in results if r.get('language') == 'cpp']
+    c_equiv = sum(1 for r in c_results 
+                  if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    cpp_equiv = sum(1 for r in cpp_results 
+                    if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    
+    print(f"\n{'='*70}")
+    print(f"[PIPELINED] Complete!")
+    print(f"{'='*70}")
+    print(f"  Processed: {len(results)}/{total}")
+    if total_dropped > 0:
+        print(f"  Dropped: {total_dropped} (compile:{dropped_counter['compile']}, ghidra:{dropped_counter['ghidra']}, summary:{dropped_counter['summary']})")
+    print(f"  Equivalent: {equivalent_count}/{len(results)} ({100*equivalent_count/len(results) if results else 0:.0f}%)")
+    print(f"    C:   {c_equiv}/{len(c_results)}")
+    print(f"    C++: {cpp_equiv}/{len(cpp_results)}")
+    print(f"{'='*70}\n")
+    
+    return results
+
+
+# =============================================================================
+# STREAMING PIPELINE - EACH PROGRAM FLOWS THROUGH ENTIRE PIPELINE INDEPENDENTLY
+# =============================================================================
+
+def process_single_program_streaming(
+    data: Dict, 
+    temp_base_dir: Path,
+    cfg_script: Path,
+    callgraph_script: Path
+) -> Optional[Dict]:
+    """
+    Process a single program through the ENTIRE pipeline: compile → ghidra → summary → vexhelix.
+    
+    This is the atomic unit of the streaming pipeline. Each program is completely
+    independent and can run in parallel with others.
+    
+    Returns enriched program data with optimization results, or None if failed.
+    """
+    global active_count, completed_count, total_tasks
+    
+    idx = data['index']
+    lang = data.get('language', 'c')
+    task_id = f"P{idx}"
+    
+    with print_lock:
+        active_count += 1
+        print(f"[STREAM] {task_id} ({lang}) START | active: {active_count}", flush=True)
+    
+    start_time = time.time()
+    
+    try:
+        # =====================================================================
+        # STEP 1: COMPILE
+        # =====================================================================
+        compile_result = compile_single_program(data, temp_base_dir)
+        
+        if not compile_result.success:
+            with print_lock:
+                active_count -= 1
+                completed_count += 1
+                print(f"[✗] {task_id} ({lang}): compile_failed | "
+                      f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+            return None
+        
+        with print_lock:
+            print(f"[STREAM] {task_id} ({lang}) compiled ✓", flush=True)
+        
+        # =====================================================================
+        # STEP 2: GHIDRA ANALYSIS
+        # =====================================================================
+        ghidra_result = analyze_single_executable(
+            idx, 
+            compile_result.executable_path, 
+            cfg_script, 
+            callgraph_script
+        )
+        
+        if ghidra_result is None:
+            with print_lock:
+                active_count -= 1
+                completed_count += 1
+                print(f"[✗] {task_id} ({lang}): ghidra_failed | "
+                      f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+            return None
+        
+        with print_lock:
+            print(f"[STREAM] {task_id} ({lang}) ghidra ✓", flush=True)
+        
+        # =====================================================================
+        # STEP 3: ENRICH DATA
+        # =====================================================================
+        enriched_data = split_enrichment(data, ghidra_result, compile_result.executable_path)
+        
+        # =====================================================================
+        # STEP 4: GENERATE SUMMARY (inline, not batched)
+        # =====================================================================
+        for func_data in enriched_data['functions']:
+            summary_prompt = config["prompts"]["summary_prompt"]
+            prompt = f"{summary_prompt}"
+            if func_data.get('ghidra_code'):
+                prompt += f"\n\nGhidra Code:\n```c\n{func_data['ghidra_code']}\n```"
+            if func_data.get('asm'):
+                prompt += f"\n\nAssembly Instructions:\n{func_data['asm'][:2000]}"
+            
+            func_data['function_summary'] = llm_interface.generate(prompt)
+        
+        with print_lock:
+            print(f"[STREAM] {task_id} ({lang}) summary ✓", flush=True)
+        
+        # =====================================================================
+        # STEP 5: VEXHELIX OPTIMIZATION LOOP
+        # =====================================================================
+        for func_data in enriched_data['functions']:
+            optimization_success, optimized_code, stats = get_optimized_code_v6(
+                c_code=func_data['ghidra_code'],
+                function_summary=func_data['function_summary'],
+                caller_and_callee_summary=gen_context_summary(enriched_data['callgraph']),
+                function_sog="",
+                language=lang,
+                llm_interface=llm_interface,
+                original_binary_path=Path(enriched_data['original_binary_path']),
+                function_name=func_data['f_name'],
+                original_asm=func_data.get('asm', ''),
+                original_ghidra=func_data['ghidra_code'],
+                num_args=3,
+                task_id=task_id
             )
             
             func_data['optimization_status'] = optimization_success
             func_data['optimized_code'] = optimized_code
             func_data['optimization_stats'] = stats
-            
-            print(f"[Batch Optimize V6] Stats for {func_data['f_name']} ({lang}):")
-            print(f"  - Static repairs: {stats['static_repair_iterations']}")
-            print(f"  - Semantic repairs: {stats['semantic_repair_iterations']}")
-            print(f"  - VexHelix calls: {stats['vexhelix_calls']}")
-            print(f"  - Equivalent achieved: {stats['vexhelix_equivalent_achieved']}")
-            print(f"  - Final result: {stats['final_result']}")
+        
+        duration = time.time() - start_time
+        final_result = enriched_data['functions'][0].get('optimization_stats', {}).get('final_result', 'unknown') if enriched_data['functions'] else 'no_functions'
+        
+        with print_lock:
+            active_count -= 1
+            completed_count += 1
+            sym = "✓" if final_result == 'equivalent' else "✗"
+            stats = enriched_data['functions'][0].get('optimization_stats', {}) if enriched_data['functions'] else {}
+            print(f"[{sym}] {task_id} ({lang}): {final_result} "
+                  f"({stats.get('semantic_repair_iterations', 0)}it, "
+                  f"{stats.get('vexhelix_calls', 0)}vex, {duration:.1f}s) | "
+                  f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+        
+        return enriched_data
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        with print_lock:
+            active_count -= 1
+            completed_count += 1
+            print(f"[✗] {task_id} ({lang}): exception ({duration:.1f}s) - {str(e)[:100]} | "
+                  f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
+        return None
+
+
+def process_batch_streaming(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
+    """
+    Process a batch with TRUE END-TO-END STREAMING.
     
-    print(f"[Batch Optimize V6] Completed optimization\n")
-    return enriched_programs
+    Each program flows through the entire pipeline independently:
+    Program 1: compile → ghidra → summary → vexhelix (runs immediately!)
+    Program 2: compile → ghidra → summary → vexhelix (as soon as worker available)
+    
+    This eliminates the bottleneck of waiting for ALL compilations, then ALL ghidra, etc.
+    """
+    global active_count, completed_count, total_tasks
+    
+    # Reset counters
+    active_count = 0
+    completed_count = 0
+    total_tasks = len(batch_items)
+    
+    print(f"\n{'='*70}")
+    print(f"[STREAMING PIPELINE] Starting TRUE end-to-end streaming")
+    print(f"[STREAMING PIPELINE] Programs: {total_tasks}")
+    print(f"[STREAMING PIPELINE] Concurrent workers: {PARALLEL_REPAIR_WORKERS}")
+    print(f"[STREAMING PIPELINE] Each program: compile → ghidra → summary → vexhelix (independent)")
+    print(f"{'='*70}\n")
+    
+    # Pre-resolve script paths once
+    cfg_script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "batched_cfg_extractor.py"
+    callgraph_script = Path(__file__).resolve().parent.parent / "src" / "scripts" / "batched_call_graph_extractor.py"
+    
+    results = []
+    
+    # TRUE STREAMING: each program runs through entire pipeline independently
+    with ThreadPoolExecutor(max_workers=PARALLEL_REPAIR_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                process_single_program_streaming, 
+                item, 
+                temp_base_dir,
+                cfg_script,
+                callgraph_script
+            ): item
+            for item in batch_items
+        }
+        
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                if result is not None:
+                    results.append(result)
+            except Exception as e:
+                item = futures[future]
+                print(f"[ERROR] Program {item.get('index', '?')} future exception: {e}", flush=True)
+    
+    # Print summary
+    equivalent_count = sum(1 for r in results 
+                          if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    
+    c_results = [r for r in results if r.get('language') == 'c']
+    cpp_results = [r for r in results if r.get('language') == 'cpp']
+    c_equiv = sum(1 for r in c_results 
+                  if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    cpp_equiv = sum(1 for r in cpp_results 
+                    if r['functions'] and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+    
+    print(f"\n{'='*70}")
+    print(f"[STREAMING PIPELINE] Complete!")
+    print(f"{'='*70}")
+    print(f"  Successful: {len(results)}/{total_tasks}")
+    print(f"  Equivalent: {equivalent_count}/{len(results)} ({100*equivalent_count/len(results) if results else 0:.0f}%)")
+    print(f"    C:   {c_equiv}/{len(c_results)}")
+    print(f"    C++: {cpp_equiv}/{len(cpp_results)}")
+    print(f"{'='*70}\n")
+    
+    return results
 
 
 # =============================================================================
-# MAIN PROCESSING PIPELINE
+# LEGACY BATCH PROCESSING PIPELINE (kept for reference)
 # =============================================================================
 
 def process_batch(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
     """
-    Process a batch of items through the entire pipeline with VexHelix verification.
+    Process a batch of items - NOW USES PIPELINED ARCHITECTURE.
+    
+    Change this to switch between processing modes:
+    - process_batch_pipelined: TRUE CPU-style pipeline (recommended)
+    - process_batch_streaming: Per-program parallelism
+    """
+    # Use the new PIPELINED architecture for maximum throughput
+    return process_batch_pipelined(batch_items, temp_base_dir)
+
+
+def process_batch_legacy(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
+    """
+    LEGACY: Process a batch with separate stages (compile ALL → ghidra ALL → etc.)
+    Kept for reference. Use process_batch_streaming for true parallelism.
     """
     # Step 1: Compile all programs in parallel (original code)
     compile_results = batch_compile_programs(batch_items, temp_base_dir)
@@ -1067,7 +1954,13 @@ def save_results(results: List[Dict], output_file_path: Path):
 
 def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
     """
-    Process the humaneval decompile json file with batched operations and VexHelix verification.
+    Process the humaneval decompile json file with TRUE PIPELINED architecture.
+    
+    NO MORE BATCH LOOPS! All items flow through the pipeline at once.
+    Each stage controls its own parallelism:
+      COMPILE (20) → GHIDRA (8) → SUMMARY (12) → VEXHELIX (12)
+    
+    This means while item 1 is in VEXHELIX, item 25 can be in COMPILE!
     
     Args:
         json_path: Path to humaneval-decompile.json
@@ -1086,39 +1979,38 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     else:
         humaneval_data = humaneval_data[start_index:]
     
+    # Add index to each item for tracking
+    for i, item in enumerate(humaneval_data):
+        item['index'] = start_index + i
+    
     # Count languages
     c_count = sum(1 for d in humaneval_data if d['language'] == 'c')
     cpp_count = sum(1 for d in humaneval_data if d['language'] == 'cpp')
     
     print(f"\n{'='*70}")
-    print(f"MissionDecompile V6 - VexHelix Semantic Verification")
+    print(f"MissionDecompile V6 - TRUE PIPELINED Architecture")
     print(f"{'='*70}")
-    print(f"Processing {len(humaneval_data)} functions from HumanEval dataset")
+    print(f"Processing {len(humaneval_data)} functions (ALL AT ONCE through pipeline)")
     print(f"  - C programs: {c_count}")
     print(f"  - C++ programs: {cpp_count}")
     print(f"VexHelix API: {VEXHELIX_API_URL}")
-    print(f"Concurrent repair workers: {CONCURRENT_REPAIR_SIZE}")
+    print(f"Pipeline stage widths:")
+    print(f"  COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
+    print(f"  GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
+    print(f"  SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers (LLM)")
+    print(f"  VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers (LLM repair loop)")
     print(f"{'='*70}\n")
     
     with tempfile.TemporaryDirectory() as temp_base_dir:
         temp_base_path = Path(temp_base_dir)
         
-        batch_size = COMPILATION_BATCH_SIZE
-        total_batches = (len(humaneval_data) + batch_size - 1) // batch_size
+        # NO BATCH LOOP! Feed ALL items into the pipeline at once
+        # The pipeline stages control parallelism internally
+        all_results = process_batch(humaneval_data, temp_base_path)
         
-        for batch_idx in range(0, len(humaneval_data), batch_size):
-            batch_num = batch_idx // batch_size + 1
-            batch_items = humaneval_data[batch_idx:batch_idx + batch_size]
-            
-            print(f"\n{'='*70}")
-            print(f"BATCH {batch_num}/{total_batches}: Processing items {start_index + batch_idx} to {start_index + batch_idx + len(batch_items) - 1}")
-            print(f"{'='*70}\n")
-            
-            batch_results = process_batch(batch_items, temp_base_path)
-            
-            if batch_results:
-                save_results(batch_results, output_file_path)
-                print(f"\n[Save] Saved {len(batch_results)} results from batch {batch_num}")
+        if all_results:
+            save_results(all_results, output_file_path)
+            print(f"\n[Save] Saved {len(all_results)} results")
     
     print(f"\n{'='*70}")
     print(f"Processing complete! Results saved to {output_file_path}")

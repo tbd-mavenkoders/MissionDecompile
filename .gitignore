@@ -14,6 +14,7 @@ ENV/
 
 # Output and data directories
 output/
+outputs/
 logs/
 *.log
 
@@ -49,6 +50,7 @@ tmp/
 
 # MissionDecompile specific
 data/humaneval-decompile/*.c
+data/
 data/humaneval-decompile/*.cpp
 data/exebench/*
 !data/humaneval-decompile/humaneval-decompile.json
