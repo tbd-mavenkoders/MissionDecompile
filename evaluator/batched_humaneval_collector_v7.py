@@ -694,8 +694,8 @@ Function Summary: {function_summary}
     
     if caller_and_callee_summary:
         prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
-    if function_sog:
-        prompt += f"\n\nFunction SOG:\n{function_sog}"
+    # if function_sog:
+    #     prompt += f"\n\nFunction SOG:\n{function_sog}"
     
     return prompt
 
@@ -735,8 +735,8 @@ def get_static_repair_prompt(
     
     if caller_and_callee_summary:
         prompt += f"\n\nCaller and Callee Summary:\n{caller_and_callee_summary}"
-    if function_sog:
-        prompt += f"\n\nFunction SOG:\n{function_sog}"
+    # if function_sog:
+    #     prompt += f"\n\nFunction SOG:\n{function_sog}"
     
     return prompt
 
@@ -1518,13 +1518,14 @@ def split_enrichment(data: Dict, ghidra_result: Dict, original_binary_path: Path
         # V7: Load TypeForge type constraints with Typehoon fallback
         f_data['type_constraints'] = get_type_constraints(data, str(original_binary_path))
         
-        sog_path = cfg_map.get(function_name)
-        if sog_path:
-            with open(sog_path, 'r') as f:
-                f_data['sog_dot'] = f.read()
-        else:
-            f_data['sog_dot'] = ""
-        
+        # sog_path = cfg_map.get(function_name)
+        # if sog_path:
+        #     with open(sog_path, 'r') as f:
+        #         f_data['sog_dot'] = f.read()
+        # else:
+        #     f_data['sog_dot'] = ""
+        f_data['sog_dot'] = ""
+
         callers = [caller for caller, callees in callgraph.items() if function_name in callees]
         callees = callgraph.get(function_name, [])
         f_data['callers'] = callers
