@@ -24,6 +24,7 @@ logs/
 htmlcov/
 .tox/
 tests/v6_integration/outputs/*
+tests/v7_test_output/
 !tests/v6_integration/outputs/.gitkeep
 
 # IDEs

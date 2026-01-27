@@ -2,15 +2,15 @@ paths:
   ghidra_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
   postscript_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra/decompile.py
   ghidra_root_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC
-  scripts_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/src/scripts
+  scripts_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/src/scripts
 
 humaneval:
-  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/data/humaneval-decompile
-  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/output/humaneval-decompile
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/data/humaneval-decompile
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/humaneval-decompile
 
 exebench:
-  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/data/exebench
-  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v6-DHaltVEXIR/MissionDecompile/output/exebench
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/data/exebench
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/exebench
 
 
 llm:
@@ -28,92 +28,310 @@ llm:
 
 
 prompts:
-  system_prompt:
-    You are given a Ghidra-decompiled C/C++ function body (pseudocode) and a short natural-language summary describing the function’s purpose,
-    Produce a single Linux-compilable C or C++ function that implements the same source-level behavior.
-    - Language & Function Signature (MANDATORY)
-    Reconstruct the original source-level function signature, not the decompiler ABI.
-    Preserve the logical calling convention that a normal C++ programmer would write.
-    If the function takes STL containers by value in the original source, keep them by value.
-    If the function constructs and returns an STL container, return it by value.
-    Never expose internal ABI artifacts such as raw pointers used for return-value optimization, begin/end pointer pairs, helper structs (e.g., ArrayRange), or allocator/M* internals.
-    - STRICT RULES
-    Do NOT change the number of parameters.
-    Do NOT change the name of the function
-    Do NOT convert value parameters into pointer parameters.
-    Do NOT introduce helper structs or wrapper types.
-    - Return-Type Reconstruction Rules (CRITICAL)
+  system_prompt: |
+    You are given assembly + Ghidra pseudocode for a C/C++ function. Your task is to produce Linux-compilable source code that matches the ASSEMBLY semantics.
+    
+    CRITICAL: Ghidra output is NOT ground truth. It may be correct 50-70% of the time, but ERRORS ARE PLAUSIBLE.
+    
+    ALTHOUGH UNLIKELY, STILL PLAUSIBLE - Ghidra may have:
+    - SIGNATURE ERRORS: wrong return type (void vs int/float), wrong param count, wrong param types
+    - TYPE ERRORS: pointer vs integer confusion, signed vs unsigned, float vs int, array vs pointer
+    - CONTROL FLOW ERRORS: empty loop bodies, wrong bounds, missing branches, goto artifacts
+    - DATA FLOW ERRORS: artificial temporaries, wrong variable identity, missing operations
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    RETURN TYPE INFERENCE (CRITICAL - DO NOT TRUST GHIDRA'S RETURN TYPE)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    Ghidra often INCORRECTLY says a function returns void when it actually returns a value!
+    
+    RULE 1 - ASSEMBLY-BASED RETURN TYPE (HIGHEST PRIORITY):
+    • If the last write to xmm0 on all exit paths is a scalar single-precision FP value and there are no calls or stores afterward, then the return type is likely float.
+    • If the function itself produces a double into xmm0 and returns immediately, then return type is double.
+    • If the final definition of eax dominates ret and is not consumed elsewhere → return type is 32-bit scalar (int, unsigned, bool, etc.)
+    • If only rax is written and returned → 64-bit scalar (pointer, long, size_t, handle, etc.)
+    • If PXOR xmm0,xmm0 + CVTSI2SS + DIVSS pattern → return type is FLOAT, not void!
+    - If you see any of these, the first point must be ignored:
+      Hidden sret pointer (first argument used as object storage),
+      Writes through rdi / rcx that persist,
+      Constructor calls on that pointer,
+      No destructor before return,
+      ➡ Return type is NOT scalar, regardless of xmm0/rax contents.
+      This is how std::vector<T>, std::string, structs, etc. return.
+    
+    RULE 2 - SEMANTIC-BASED RETURN TYPE (USE WHEN ASSEMBLY IS UNCLEAR):
+    • If function COMPUTES a value (sum, average, max, min, count) → it RETURNS that value
+    • If function ACCUMULATES into a variable then divides → it RETURNS the result
+    • If function has TWO LOOPS (sum then deviation) → Mean Absolute Deviation → returns FLOAT
+    • If function only MODIFIES parameters (sorts, fills) → may return void
+    • If function ALLOCATES memory → returns pointer
+    • Functions that compute MUST return; functions that modify MAY return void
+    
+    RULE 3 - GHIDRA "void" IS OFTEN WRONG:
+    • If Ghidra says "void" but function clearly COMPUTES something → ignore Ghidra, return the computed type
+    • If Ghidra says "void" but assembly shows xmm0 setup before ret → return float/double
+    • If Ghidra says "void" but function summary mentions "returns", "computes", "calculates" → return a value
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    C++ STL CONTAINER HANDLING (CRITICAL FOR vector, string, etc.)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    Ghidra POORLY handles C++ STL templates - the decompiled code may be COMPLETELY WRONG!
+    
+    COMMON GHIDRA STL FAILURES:
+    • std::vector<float> may appear as "void func(vector param)" with void return - WRONG!
+    • Vector element access via operator[] may be lost entirely
+    • Accumulator variables in loops may be dropped
+    • std::abs() calls may appear but their return values discarded - WRONG!
+    
+    STL RECOVERY STRATEGY:
+    • If function takes std::vector<T> and assembly shows addss loop → accumulating sum
+    • If function has TWO addss loops with divss between → mean then deviation (MAD algorithm)
+    • If Ghidra shows std::abs() called but result unused → Ghidra is WRONG, result IS used
+    • ALWAYS return computed values from STL functions, even if Ghidra says void
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    FLOATING-POINT OPERATION DETECTION (CRITICAL)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    If assembly contains these instructions, the function uses FLOATING-POINT math:
+    • ADDSS/ADDSD - single/double precision addition
+    • SUBSS/SUBSD - single/double precision subtraction  
+    • MULSS/MULSD - single/double precision multiplication
+    • DIVSS/DIVSD - single/double precision division
+    • CVTSI2SS/CVTSI2SD - integer to float/double conversion
+    • MOVSS/MOVSD - move single/double precision
+    • ANDPS/ANDPD - bitwise AND (often used for fabsf/fabs)
+    • PXOR XMM,XMM - zero a float register
+    
+    If you see ANDPS with a constant mask (0x7fffffff) → this is fabsf() for absolute value!
+    
+    NEVER generate integer-only code when assembly shows floating-point instructions!
+    NEVER generate pointer arithmetic when assembly shows floating-point math!
+    
+    REPAIR STRATEGY:
+    1. Do NOT trust Ghidra function signature, parameter count, or return type - infer from assembly
+    2. Do NOT trust Ghidra inferred types - recover signedness, pointer vs integer from patterns
+    3. Merge temporary locals into logical variables based on data flow; drop artificial locals
+    4. Recover structured control (if/while/for) from gotos where semantics allow
+    5. Simplify boolean and conditional logic to high-level expressions
+    6. Replace low-level pointer arithmetic with arrays/structs where consistent
+    7. Restore C++ constructs when patterns show methods, vtables, this usage
+    8. Reflect real call sites - correct argument order and count from caller use
+    
+    ASSEMBLY HINTS:
+    - movss/addss/mulss/divss = floating-point operations REQUIRED
+    - cvtsi2ss = int to float conversion
+    - xmm0 set before ret = return type is float/double
+    - eax/rax set before ret = return type is int/long
+
+    TYPE RECONSTRUCTION RULES (CRITICAL)
+    If a type-constraint specification is provided, use it to guide your return-type reconstruction.
+    HOWEVER: If TypeHoon says "void" but assembly shows xmm0/eax setup before ret, IGNORE TypeHoon.
+    HOWEVER: If TypeHoon says "void" but function semantics clearly compute a value, IGNORE TypeHoon.
+    You may use it to infer likely high-level types (e.g., std::string, std::vector<T>, iterators, or struct-like layouts).
+    Treat forged or inferred structs (e.g., { char*, size_t, size_t }) as implementation artifacts, not as required source-level types.
     If the function builds a new std::vector, std::string, or other STL object, return it by value.
     If the function mutates and returns an externally owned object, use reference semantics.
     Never return pointers to STL containers unless the original source clearly did so.
-    - Code Correctness & Safety
-    Before writing code, Determine whether the function computes and returns a value or performs side effects.
-    Prefer value semantics over pointer semantics.
-    Ensure the function compiles with gcc/g++ on modern Linux.
-    Add only minimal required headers.
-    Avoid undefined behavior (out-of-bounds access, invalid dereference, etc.).
-    - Output Constraints
-    Output only the corrected source code.
-    Do NOT include main() unless it exists in the provided pseudocode.
-    Do NOT include test code, explanations, comments about the process, or extra text.
-    - Semantic Ground Truth (Highest Priority)
-    If the summary or original source implies a signature like
-    std::vectorstd::string func0(
-    std::vectorstd::string strings,
-    std::string substring
-    );
-    then that exact API must be preserved, even if the decompiled code uses pointer returns, in-place construction, hidden ABI temporaries, allocator internals, or return-value optimization artifacts.
-    - Final Instruction
-    Now produce the corrected function implementation that exactly matches the pseudocode and summary while respecting all rules above.
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    O2/O3 VECTORIZED CODE (SIMD TOLERANCE)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    Highly optimized (O2/O3) code may have complex SIMD patterns:
+    • MOVUPS/MOVAPS - packed float operations
+    • SHUFPS - shuffle packed floats
+    • UNPCKHPS/UNPCKLPS - unpack operations
+    • Loop unrolling with multiple addss per iteration
+    
+    For SIMD code: Focus on SEMANTIC equivalence, not exact instruction matching.
+    A simple scalar loop that computes the same result is ACCEPTABLE.
+    
+    STRICT RULES:
+    - Do NOT change the function name
+    - Output ONLY the corrected source code (C or C++ as appropriate)
+    - Do NOT include main() unless it exists in the provided pseudocode
+    - Do NOT include test code, explanations, or extra text
+    - Preserve observed BEHAVIOR from assembly; do not introduce undefined behavior
+    - Ensure the code compiles with gcc/g++ on modern Linux
 
 
-  compilation_error:
-    Please fix all compilation errors in the given source code while preserving the original functions name. Follow these rules
-    1. Do not change the functions name, the number of arguments, their types, or their order unless required to fix compilation errors.
-    2. Do not generate a main functions if the provided code does not contain one.
-    3. Only output the corrected source code. Do not explain anything, and do not include extra instructions.
+  compilation_error: |
+    Please fix all compilation errors in the given source code while preserving the original function name. Follow these rules:
+    1. Do not change the function name, the number of arguments, their types, or their order unless required to fix compilation errors.
+    2. Do not generate a main function if the provided code does not contain one.
+    3. Only output the corrected source code. Do not explain anything.
     4. If compilation errors are caused by missing library functions or types, add the minimal required include statements.
-    5. Do not alter the function’s purpose. Use the provided summary to maintain correct logic and semantics.
+    5. Do not alter the function purpose. Use the provided summary to maintain correct logic and semantics.
     6. Remove undefined behavior where possible (NULL checks, bounds checks) only if required to make the code compile.
     7. The output must be valid C or C++ (matching the language of the provided code) and must compile on Linux.
     8. Do not introduce new helper functions unless required for compilation; prefer fixing the existing code.
     9. Only print the fixed, compilable source code.
 
 
-  summary_prompt: Summarize the provided function in no less than 45 words. Do not return more than 70 words. Focus on the function's purpose and key operations. Avoid implementation details. Use clear, concise language suitable for a technical audience. Only return the summary text without additional commentary.
+  summary_prompt: |
+    Analyze the provided function and determine its TRUE purpose and behavior.
+    
+    CRITICAL: Ghidra may be WRONG about return types! Check the assembly:
+    - If xmm0/xmm1 is set before RET → function returns FLOAT/DOUBLE, NOT void
+    - If eax/rax is set before RET → function returns INT/LONG, NOT void
+    - DIVSS/DIVSD xmm0 before RET → definitely returns float/double
+    - ANDPS with 0x7fffffff mask → fabsf() absolute value pattern
+    
+    For C++ std::vector<float>:
+    - Ghidra DESTROYS STL semantics - shows void when it's actually float
+    - Look for addss/divss loop patterns → Mean Absolute Deviation → returns float!
+    - If you see std::abs() called in loop → result IS accumulated, Ghidra just lost it
+    
+    YOUR OUTPUT (45-70 words):
+    1. State the TRUE return type (based on assembly, NOT Ghidra)
+    2. State TRUE parameter types
+    3. Describe what the function computes
+    4. If Ghidra says void but assembly shows xmm0/eax before ret, STATE: "Ghidra incorrectly shows void return"
+    
+    Only return the summary text without additional commentary.
 
-  semantic_repair:
-    You are tasked with fixing logical/semantic errors in decompiled C/C++ code.
-    The VexHelix symbolic execution tool has detected that your current implementation is NOT semantically equivalent to the original binary.
-    This means there exists at least one input where your code produces different output than the original.
+  signature_analysis_prompt: |
+    You are an expert binary analyst. Analyze the function signature by comparing Ghidra's output against assembly ground truth.
     
-    Context Provided
-    - Original Assembly Code ; The ground-truth binary's assembly instructions
-    - Original Ghidra Decompilation ; Initial decompiled pseudocode from Ghidra
-    - Current Decompiled Code ; Your current (compilable but incorrect) implementation
-    - Function Summary ; Natural language description of intended behavior
-    - VexHelix Verification Result ; Proof that semantic equivalence failed
-    - Counterexample (if available) ; Specific input values that expose the bug
+    GHIDRA IS FREQUENTLY WRONG about:
+    1. Return types (says void when it's actually float/int)
+    2. Parameter types (confuses pointers and integers)
+    3. C++ STL containers (destroys std::vector<float> semantics)
     
-    Your Task
-    1. Carefully analyze the counterexample to understand what input causes divergence
-    2. Compare your current code logic against the original assembly and Ghidra code
-    3. Identify the specific logical error (wrong operator, incorrect condition, missing edge case, etc.)
-    4. Fix ONLY the semantic bug while preserving
-       - Function signature (name, parameters, return type)
-       - Compilation compatibility
-       - Overall structure
+    ASSEMBLY PATTERNS TO CHECK:
+    - xmm0 set before RET → return float/double
+    - eax/rax set before RET → return int/long  
+    - DIVSS/DIVSD before RET → definitely returns float/double
+    - ADDSS loop + DIVSS → sum/mean computation, returns float
+    - Two ADDSS loops with DIVSS → Mean Absolute Deviation, returns float
+    - ANDPS 0x7fffffff → fabsf() pattern
+    - CVTSI2SS → int to float conversion
     
-    Critical Rules
-    - Do NOT change the function signature
-    - Do NOT introduce new undefined behavior
-    - Do NOT add debug code or comments
-    - Output ONLY the corrected source code
-    - The fix must address the specific counterexample provided
-    - Ensure the code still compiles after your changes
+    C++ STL RECOVERY:
+    - std::vector<float> + float assembly → function returns float, not void!
+    - std::abs() in loop → result IS used, Ghidra lost the accumulation
     
-    Output Format
-    Provide only the complete corrected function implementation with no additional text.
+    OUTPUT FORMAT (JSON):
+    {
+      "ghidra_return_type": "<what Ghidra says>",
+      "actual_return_type": "<what assembly shows>",
+      "return_type_correct": true/false,
+      "ghidra_params": ["<ghidra param types>"],
+      "actual_params": ["<inferred from assembly>"],
+      "params_correct": true/false,
+      "is_float_computation": true/false,
+      "is_stl_function": true/false,
+      "likely_algorithm": "<e.g., mean absolute deviation, sum, etc.>",
+      "critical_warning": "<describe the most important Ghidra error if any>"
+    }
+    
+    Output ONLY the JSON object, no explanations.
+
+  semantic_repair: |
+    You are fixing decompiled C/C++ code that produces WRONG outputs. VexHelix found semantic differences.
+    
+    CRITICAL: ASSEMBLY IS GROUND TRUTH - Ghidra pseudocode is NOT reliable!
+    Ghidra may be correct 50-70% of the time, but ERRORS ARE PLAUSIBLE AND COMMON.
+    
+    ALTHOUGH UNLIKELY, STILL PLAUSIBLE - Ghidra errors:
+    
+    SIGNATURE ERRORS:
+    - Wrong return type: void instead of int/float/double (check xmm0/eax before ret)
+    - Wrong parameter count: missing params or extra params
+    - Wrong parameter types: int vs float*, long vs size_t, signed vs unsigned
+    - Swapped parameters: argument order does not match actual use
+    
+    TYPE ERRORS:
+    - Pointer vs integer confusion: treating addresses as values
+    - Signed vs unsigned: wrong signedness affects comparisons
+    - Float vs int: missing floating-point ops (look for addss/mulss/divss in assembly)
+    - Array vs pointer: wrong indexing or stride
+    
+    CONTROL FLOW ERRORS:
+    - Empty loop bodies: actual operations omitted
+    - Wrong loop bounds: off-by-one, wrong direction
+    - Missing branches: conditional code collapsed
+    - Goto artifacts: structured control obscured
+    
+    DATA FLOW ERRORS:
+    - Artificial temporaries: merged or split incorrectly
+    - Wrong variable identity: different vars confused
+    - Missing operations: arithmetic silently dropped
+    - Compiler artifacts: ABI/optimization noise kept
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    RETURN TYPE INFERENCE (MOST COMMON BUG - GHIDRA SAYS void BUT IT'S NOT)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    THE #1 REASON FOR SEMANTIC FAILURES: Wrong return type!
+    
+    CHECK ASSEMBLY BEFORE RET INSTRUCTION:
+    • If xmm0 has a value before RET → return type is FLOAT or DOUBLE, NOT void!
+    • If eax/rax has a value before RET → return type is INT/LONG, NOT void!
+    • If DIVSS xmm0/DIVSD xmm0 before RET → definitely returns float/double!
+    
+    USE SEMANTIC REASONING:
+    • If function COMPUTES something (sum, average, count, etc.) → it MUST return it
+    • If function has accumulator loops → it MUST return the accumulated value
+    • If Ghidra shows computations but "return;" with no value → GHIDRA IS WRONG
+    • A function that computes but doesn't return makes NO SENSE → add return!
+    
+    COMMON PATTERN - Mean Absolute Deviation (MAD):
+    • Loop 1: sum all elements, divide by count → mean
+    • Loop 2: sum |element - mean| for all elements, divide by count → MAD
+    • This function MUST return float, even if Ghidra says void!
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    FLOATING-POINT DETECTION (NEVER GENERATE INTEGER CODE FOR FLOAT ASSEMBLY)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    If assembly contains ADDSS, SUBSS, MULSS, DIVSS, MOVSS → use FLOAT types!
+    If assembly contains ADDSD, SUBSD, MULSD, DIVSD, MOVSD → use DOUBLE types!
+    If assembly contains ANDPS with 0x7fffffff mask → this is fabsf() absolute value!
+    If assembly contains CVTSI2SS → converting int to float!
+    
+    NEVER generate pointer arithmetic (base + count*4) when assembly shows float operations!
+    NEVER confuse array stride calculation with the actual computation!
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    C++ STL RECOVERY (Ghidra DESTROYS std::vector/string semantics)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    For C++ with std::vector<float>:
+    • Ghidra may show "void func(vector)" but it should be "float func(vector<float>)"
+    • Ghidra may discard return values from std::abs() - YOU MUST ACCUMULATE THEM
+    • Ghidra may show operator[] calls but lose the accumulation logic
+    
+    If you see std::vector + addss/divss assembly → function returns float!
+    If you see two loops with divss → Mean Absolute Deviation, returns float!
+    
+    ═══════════════════════════════════════════════════════════════════════════════
+    O2/O3 SIMD TOLERANCE (Don't try to match SIMD exactly)
+    ═══════════════════════════════════════════════════════════════════════════════
+    
+    For highly optimized code with MOVUPS, SHUFPS, UNPCKHPS, etc.:
+    • Focus on SEMANTIC equivalence, not instruction-level matching
+    • A simple scalar loop that computes the same result is ACCEPTABLE
+    • Don't try to replicate SIMD unrolling - just get the algorithm right
+    • Use fabsf() for absolute value, don't try to replicate ANDPS bit manipulation
+    
+    REPAIR STRATEGY:
+    1. Analyze COUNTEREXAMPLES - understand what input causes divergence
+    2. CHECK RETURN TYPE FIRST - most common bug is void instead of float/int
+    3. CHECK TYPE CONSTRAINTS if provided - more reliable than Ghidra (BUT override void if assembly disagrees)
+    4. Analyze ASSEMBLY to understand what the function REALLY does
+    5. DO NOT repeat previous failed attempts - try a DIFFERENT approach
+    6. Identify where Ghidra went wrong (return type? missing ops? wrong types?)
+    7. Rewrite based on assembly semantics, not Ghidra artifacts
+    
+    RULES:
+    - Do NOT change the function name
+    - Parameter/return types CAN and SHOULD be changed if assembly/semantics indicate they are wrong
+    - ALWAYS return a value if the function computes something - ignore Ghidra's void!
+    - Do NOT introduce undefined behavior
+    - Output ONLY the corrected source code, no explanations
 
   analysis_prompt: You are given an object containing the following fields
     - index ; The corpus index of the function.

@@ -1,0 +1,203 @@
+paths:
+  ghidra_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC/support/analyzeHeadless
+  postscript_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra/decompile.py
+  ghidra_root_path: /workspace/home/b220032cs/fyp/repos/ansaf/common/ghidra_11.0.3_PUBLIC
+  scripts_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/src/scripts
+
+humaneval:
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/data/humaneval-decompile
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/humaneval-decompile
+
+exebench:
+  corpus_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/data/exebench
+  output_path: /workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/exebench
+
+
+llm:
+
+  ollama_provider: ollama
+  ollama_model_name: gpt-oss:20b
+  ollama_temperature: 0.3
+  ollama_base_url: http://192.168.41.119:10010
+
+  vllm_provider: vllm
+  vllm_model_name: openai/gpt-oss-20b
+  vllm_temperature: 0.3
+  vllm_base_url: http://127.0.0.1:8000
+
+
+
+prompts:
+  system_prompt:
+    You are given a Ghidra-decompiled C/C++ function body (pseudocode) and a short natural-language summary describing the function’s purpose,
+    Produce a single Linux-compilable C or C++ function that implements the same source-level behavior.
+    - Language & Function Signature (MANDATORY)
+    Reconstruct the original source-level function signature, not the decompiler ABI.
+    Preserve the logical calling convention that a normal C++ programmer would write.
+    If the function takes STL containers by value in the original source, keep them by value.
+    If the function constructs and returns an STL container, return it by value.
+    Never expose internal ABI artifacts such as raw pointers used for return-value optimization, begin/end pointer pairs, helper structs (e.g., ArrayRange), or allocator/M* internals.
+    - STRICT RULES
+    Do NOT change the number of parameters.
+    Do NOT change the name of the function
+    Do NOT convert value parameters into pointer parameters.
+    Do NOT introduce helper structs or wrapper types.
+    - Return-Type Reconstruction Rules (CRITICAL)
+    If the function builds a new std::vector, std::string, or other STL object, return it by value.
+    If the function mutates and returns an externally owned object, use reference semantics.
+    Never return pointers to STL containers unless the original source clearly did so.
+    - Code Correctness & Safety
+    Before writing code, Determine whether the function computes and returns a value or performs side effects.
+    Prefer value semantics over pointer semantics.
+    Ensure the function compiles with gcc/g++ on modern Linux.
+    Add only minimal required headers.
+    Avoid undefined behavior (out-of-bounds access, invalid dereference, etc.).
+    - Output Constraints
+    Output only the corrected source code.
+    Do NOT include main() unless it exists in the provided pseudocode.
+    Do NOT include test code, explanations, comments about the process, or extra text.
+    - Semantic Ground Truth (Highest Priority)
+    If the summary or original source implies a signature like
+    std::vectorstd::string func0(
+    std::vectorstd::string strings,
+    std::string substring
+    );
+    then that exact API must be preserved, even if the decompiled code uses pointer returns, in-place construction, hidden ABI temporaries, allocator internals, or return-value optimization artifacts.
+    - Final Instruction
+    Now produce the corrected function implementation that exactly matches the pseudocode and summary while respecting all rules above.
+
+
+  compilation_error:
+    Please fix all compilation errors in the given source code while preserving the original functions name. Follow these rules
+    1. Do not change the functions name, the number of arguments, their types, or their order unless required to fix compilation errors.
+    2. Do not generate a main functions if the provided code does not contain one.
+    3. Only output the corrected source code. Do not explain anything, and do not include extra instructions.
+    4. If compilation errors are caused by missing library functions or types, add the minimal required include statements.
+    5. Do not alter the function’s purpose. Use the provided summary to maintain correct logic and semantics.
+    6. Remove undefined behavior where possible (NULL checks, bounds checks) only if required to make the code compile.
+    7. The output must be valid C or C++ (matching the language of the provided code) and must compile on Linux.
+    8. Do not introduce new helper functions unless required for compilation; prefer fixing the existing code.
+    9. Only print the fixed, compilable source code.
+
+
+  summary_prompt: Summarize the provided function in no less than 45 words. Do not return more than 70 words. Focus on the function's purpose and key operations. Avoid implementation details. Use clear, concise language suitable for a technical audience. Only return the summary text without additional commentary.
+
+  semantic_repair: |
+    You are tasked with fixing logical/semantic AND type errors in decompiled C/C++ code.
+    The VexHelix symbolic execution tool has detected that your current implementation is NOT semantically equivalent to the original binary.
+    This means there exists at least one input where your code produces different output than the original.
+    
+    IMPORTANT - TWO CATEGORIES OF ERRORS TO CHECK
+    
+    1. SEMANTIC/LOGIC ERRORS (detected by VexHelix)
+       - Wrong operators (+,-,*,/ confusion)
+       - Incorrect conditions (< vs <=, == vs !=)
+       - Missing edge cases (null checks, bounds)
+       - Wrong loop bounds or iteration direction
+       - Incorrect bitwise operations
+    
+    2. TYPE ERRORS (may NOT be detected by VexHelix but still incorrect!)
+       VexHelix verifies behavior for explored paths but cannot check all possible inputs.
+       Type errors often only manifest for specific edge case inputs.
+       
+       Common type errors to fix:
+       - RETURN TYPE - void instead of int/float/double (check xmm0 for float, eax for int)
+       - PARAMETER TYPES - int vs float*, long vs size_t, signed vs unsigned
+       - LOCAL VARIABLE TYPES - wrong signedness, wrong pointer types
+       - CAST ERRORS - truncating casts, sign extension issues
+       - FLOAT VS INT - using integer ops when float required (check addss, mulss, divss)
+       
+       IF TYPE CONSTRAINTS ARE PROVIDED, THEY ARE ROUGH GUIDES!
+       TypeForge analysis provides correct types from binary analysis.
+       Use them to fix type-related issues even if VexHelix didn't catch them. However, use your own reasoning and judgement with the context provided.
+    
+    Context Provided
+    - Original Assembly Code - The ground-truth binary's assembly instructions
+    - Original Ghidra Decompilation - Initial decompiled pseudocode from Ghidra
+    - Current Decompiled Code - Your current (compilable but incorrect) implementation
+    - Function Summary - Natural language description of intended behavior
+    - VexHelix Verification Result - Proof that semantic equivalence failed
+    - Counterexample (if available) - Specific input values that expose the bug
+    - Type Constraints (if available) - Usually Correct types from TypeForge or Typehoon binary analysis
+    
+    Your Task
+    1. Carefully analyze the counterexample to understand what input causes divergence
+    2. CHECK THE TYPE CONSTRAINTS - ensure your types match the binary analysis
+    3. Compare your current code logic against the original assembly and Ghidra code
+    4. Identify both logical errors AND type errors
+    5. Fix all errors while preserving
+       - Function name (signature may need type fixes!)
+       - Compilation compatibility
+       - Overall structure
+    
+    Critical Rules
+    - Do NOT change the function name
+    - Parameter types CAN be changed if type constraints indicate they're wrong
+    - Return type CAN be changed if type constraints indicate it's wrong
+    - Do NOT introduce new undefined behavior
+    - Do NOT add debug code or comments
+    - Output ONLY the corrected source code
+    - The fix must address the specific counterexample provided
+    - Ensure the code still compiles after your changes
+    
+    Output Format
+    Provide only the complete corrected function implementation with no additional text.
+
+  analysis_prompt: You are given an object containing the following fields
+    - index ; The corpus index of the function.
+    - original_code ; The original source code of a function.
+    - optimized_code ; The optimized version of the original source code obtained through LLM optimization.
+    - ghidra_code ; The decompiled code of the function obtained from Ghidra
+    - test_code ; The test code to validate the function's correctness.
+    - runtime_message ; The runtime error message encountered during execution.
+    The original code is built to run with the provided test code, while the optimized code is intended to be as similar in functionality to the original code as possible.
+    Your task is to analyze the runtime error message in the context of the provided codes.
+      Create a structured JSON object to identify the error associated with the optimized code and classify it into one of the following phases
+      1. Ghidra Code Issue; Errors originating from inaccuracies or limitations in Ghidra's decompilation process / if ghidra returns an inaccurate return type / argument type / argument numbers
+      2. LLM Optimization Issue; Errors introduced during the optimization of the original code by the Language Model.
+      3. Test Code Issue; Errors stemming from problems within the provided test code itself.
+      4. Environment Issue; Errors caused by external factors such as compilation settings, library versions, or system configurations.
+      5. Unknown Issue; Errors that cannot be clearly attributed.
+      The values must only be one of the above five phases, worded exactly as shown.
+    Based on your analysis, Create the following fields in the output object
+      - index; The corpus index of the function.
+      - a list of errors containing the following fields
+        - error; A boolean indicating whether an error was detected (true) or not (false).
+        - error_phase; One of the five phases mentioned above.
+        - error_type; The specific type of error encountered. This maybe chosen from the following list of errors
+          - segmentation_fault
+          - null_pointer_dereference
+          - buffer_overflow
+          - type_mismatch
+          - incorrect_return_value
+          - infinite_loop
+          - compilation_error
+          - integer_overflow
+          - floating_point_exception
+          - division_by_zero
+          - implicit_type_truncation
+          - signedness_error
+          - logic_error
+          - calling_convention_mismatch
+          - argument_order_mismatch
+          - argument_count_mismatch
+          - struct_layout_mismatch
+          - decompilation_inaccuracy
+          - incorrect_function_signature
+          - incorrect_return_type_inference
+          - incorrect_argument_type_inference
+          - incorrect_argument_number_inference
+          - misidentified_library_function
+          - missing_include
+          - assertion_failure
+          - other_runtime_error
+        - if the error_type is of type_mismatch, then include an object named type_mismatch_details, which is a list containing an object with the following fields
+          - expected_type; The type that was expected (obtained from the original code or test code).
+          - actual_type; The type that was found (obtained from the optimized code).
+          - location; whether the type mismatch occurred in 'return type' or 'argument type'.
+          - code_snippet; A small snippet of code (2-3 lines) from the optimized code where the type mismatch occurred.
+        - error_summary; A concise summary of the error and its likely cause.
+      Only return the structured object without any additional commentary or explanation.
+
+      
+
