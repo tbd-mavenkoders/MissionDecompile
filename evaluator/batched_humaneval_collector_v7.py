@@ -71,10 +71,17 @@ with open(CONFIG_PATH, "r") as f:
 c = Compiler()
 g = Ghidra()
 
+'''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
     model_name=config["llm"]["vllm_model_name"],
     base_url=config["llm"]["vllm_base_url"]
+)
+'''
+llm_interface = create_llm_interface(
+  provider=config["llm"]["gemini_provider"],
+  model_name=config["llm"]["gemini_model_name"],
+  api_key=config["llm"]["gemini_api_key"]
 )
 
 corpus_path = Path(config["humaneval"]["corpus_path"])

@@ -25,6 +25,13 @@ llm:
   vllm_temperature: 0.3
   vllm_base_url: http://127.0.0.1:8000
 
+  gemini_provider: gemini
+  gemini_model_name: gemini-2.5-pro
+  gemini_temperature: 0.3
+  gemini_api_key: AIzaSyBGtUn8b6EOJnIaY_HDVS1gcSffx1Hf-d0
+
+
+
 
 
 prompts:
