@@ -70,7 +70,6 @@ with open(CONFIG_PATH, "r") as f:
 # Initialize tools
 c = Compiler()
 g = Ghidra()
-
 '''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
@@ -78,10 +77,11 @@ llm_interface = create_llm_interface(
     base_url=config["llm"]["vllm_base_url"]
 )
 '''
+
 llm_interface = create_llm_interface(
-  provider=config["llm"]["gemini_provider"],
-  model_name=config["llm"]["gemini_model_name"],
-  api_key=config["llm"]["gemini_api_key"]
+    provider=config["llm"]["gemini_provider"],
+    model_name=config["llm"]["gemini_model_name"],
+    api_key=config["llm"]["gemini_api_key"]
 )
 
 corpus_path = Path(config["humaneval"]["corpus_path"])
@@ -2238,12 +2238,19 @@ def save_results(results: List[Dict], output_file_path: Path):
 
 def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
     """
-    Process the humaneval decompile json file with V7 pipeline.
+    Process the humaneval decompile json file with TRUE PIPELINED architecture.
     
-    V7 improvements:
+    NO BATCH LOOPS! All items flow through the pipeline at once.
+    Each stage controls its own parallelism:
+      COMPILE (20) → GHIDRA (12) → SUMMARY (12) → VEXHELIX (12)
+    
+    This means while item 1 is in VEXHELIX, item 25 can be in COMPILE!
+    
+    V7 improvements over V6:
     - TypeForge type constraints integrated
     - Enhanced prompts for type-aware repair
     - Better synergy between VexHelix and TypeForge
+    - Global rate limiter for LLM requests
     """
     output_file_path = output_dir / "batched_enriched_humaneval_decompile_v7.json"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2257,7 +2264,7 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     else:
         humaneval_data = humaneval_data[start_index:]
     
-    # Add index to each item
+    # Add index to each item for tracking
     for i, item in enumerate(humaneval_data):
         item['index'] = start_index + i
     
@@ -2266,34 +2273,31 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     cpp_count = sum(1 for d in humaneval_data if d['language'] == 'cpp')
     
     print(f"\n{'='*70}")
-    print(f"MissionDecompile V7 - TypeForge + VexHelix Integration")
+    print(f"MissionDecompile V7 - TRUE PIPELINED Architecture")
     print(f"{'='*70}")
-    print(f"Processing {len(humaneval_data)} functions")
+    print(f"Processing {len(humaneval_data)} functions (ALL AT ONCE through pipeline)")
     print(f"  - C programs: {c_count}")
     print(f"  - C++ programs: {cpp_count}")
     print(f"VexHelix API: {VEXHELIX_API_URL}")
     print(f"TypeForge path: {corpus_path / 'typeforge'}")
+    print(f"Pipeline stage widths:")
+    print(f"  COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
+    print(f"  GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
+    print(f"  SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers (LLM)")
+    print(f"  VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers (LLM repair loop)")
     print(f"{'='*70}\n")
     
     with tempfile.TemporaryDirectory() as temp_base_dir:
         temp_base_path = Path(temp_base_dir)
         
-        batch_size = COMPILATION_BATCH_SIZE
-        total_batches = (len(humaneval_data) + batch_size - 1) // batch_size
+        # NO BATCH LOOP! Feed ALL items into the pipeline at once
+        # The pipeline stages control parallelism internally via queues
+        # While item #1 is in VexHelix, item #50 can be compiling!
+        all_results = process_batch(humaneval_data, temp_base_path)
         
-        for batch_idx in range(0, len(humaneval_data), batch_size):
-            batch_num = batch_idx // batch_size + 1
-            batch_items = humaneval_data[batch_idx:batch_idx + batch_size]
-            
-            print(f"\n{'='*70}")
-            print(f"BATCH {batch_num}/{total_batches}: Processing items {start_index + batch_idx} to {start_index + batch_idx + len(batch_items) - 1}")
-            print(f"{'='*70}\n")
-            
-            batch_results = process_batch(batch_items, temp_base_path)
-            
-            if batch_results:
-                save_results(batch_results, output_file_path)
-                print(f"\n[Save] Saved {len(batch_results)} results from batch {batch_num}")
+        if all_results:
+            save_results(all_results, output_file_path)
+            print(f"\n[Save] Saved {len(all_results)} results")
     
     print(f"\n{'='*70}")
     print(f"Processing complete! Results saved to {output_file_path}")

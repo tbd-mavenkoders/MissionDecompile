@@ -31,9 +31,6 @@ llm:
   gemini_api_key: AIzaSyBGtUn8b6EOJnIaY_HDVS1gcSffx1Hf-d0
 
 
-
-
-
 prompts:
   system_prompt: |
     You are given assembly + Ghidra pseudocode for a C/C++ function. Your task is to produce Linux-compilable source code that matches the ASSEMBLY semantics.
