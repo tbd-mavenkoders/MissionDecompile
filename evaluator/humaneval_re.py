@@ -189,7 +189,7 @@ def main():
   
   corpus_file = corpus_path / "humaneval-decompile.json"
   output_file = output_path / "batched_enriched_humaneval_decompile_v6.json"
-  
+  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/tests/v7_test_output/v7_test_19cases_20260127_113834.json"
   stats = process_json_file(corpus_file, output_file)
         
 
