@@ -8,6 +8,8 @@ digraph CallGraph {
 from typing import Dict, List
 
 def build_call_graph(call_graph_path):
+  if call_graph_path == '':
+    return {}
   call_graph: Dict[str, List[str]] = {}
   
   with open(call_graph_path, 'r') as f:

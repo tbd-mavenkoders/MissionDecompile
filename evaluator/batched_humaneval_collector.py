@@ -38,11 +38,21 @@ with open(CONFIG_PATH, "r") as f:
 c = Compiler()
 g = Ghidra()
 
+'''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
     model_name=config["llm"]["vllm_model_name"],
     base_url=config["llm"]["vllm_base_url"]
 )
+'''
+
+
+llm_interface = create_llm_interface(
+  provider=config["llm"]["gemini_provider"],
+  model_name=config["llm"]["gemini_model_name"],
+  api_key=config["llm"]["gemini_api_key"]
+)
+
 
 corpus_path = Path(config["humaneval"]["corpus_path"])
 output_dir = Path(config["humaneval"]["output_path"])
@@ -454,7 +464,7 @@ def split_enrichment(data: Dict, ghidra_result: Dict) -> Dict:
     callgraph_map = ghidra_result['callgraph_map']
     
     # Build and sort call graph
-    callgraph = build_call_graph(callgraph_map.get('call_graph', {}))
+    callgraph = build_call_graph(callgraph_map.get('call_graph', ''))
     sorted_functions = topological_sort(callgraph)
     
     # Add func0 if not present
@@ -603,12 +613,12 @@ def process_humaneval_decompile(json_path: Path) -> List[Dict]:
     """
     Process the humaneval decompile json file with batched operations.
     """
-    output_file_path = output_dir / "batched_enriched_humaneval_decompile.json"
+    output_file_path = output_dir / "batched_enriched_humaneval_decompile_updated.json"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(json_path, "r") as f:
         humaneval_data = json.load(f)
-    
+            
     print(f"\n{'='*60}")
     print(f"Processing {len(humaneval_data)} functions from HumanEval dataset")
     print(f"{'='*60}\n")

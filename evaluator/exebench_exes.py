@@ -23,8 +23,8 @@ print(f"Loading config from: {CONFIG_PATH}")
 with open(CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
-corpus_path = Path(config["humaneval"]["corpus_path"])
-output_path = Path(config["humaneval"]["output_path"])
+corpus_path = Path(config["exebench"]["corpus_path"])
+output_path = Path(config["exebench"]["output_path"])
 ghidra_path = Path(config["paths"]["ghidra_root_path"])
 
 
@@ -127,6 +127,8 @@ def process_executables(exec_dir: Path):
         
 def main():
   exec_dir = corpus_path / "executables"
+  json_path = corpus_path / "exebench_data.json"
+  #process_json_file(json_path)
   process_executables(exec_dir)
   
 if __name__ == "__main__":
