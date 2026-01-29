@@ -61,6 +61,7 @@ class RateLimiter:
     def wait_if_needed(self) -> float:
         """
         Wait if necessary to stay within rate limit.
+        BLOCKS until a slot is available - ensures strict rate limiting.
         
         Returns:
             Time waited in seconds (0 if no wait needed)
@@ -68,39 +69,37 @@ class RateLimiter:
         if not self._enabled:
             return 0.0
         
+        total_wait = 0.0
+        
         with self.lock:
-            now = time.time()
-            
-            # Remove timestamps outside the window
-            while self.request_times and self.request_times[0] < now - self.window_size:
-                self.request_times.popleft()
-            
-            # Check if we're at the limit
-            if len(self.request_times) >= self.max_rpm:
-                # Calculate wait time until the oldest request falls outside window
+            while True:
+                now = time.time()
+                
+                # Remove timestamps outside the window
+                while self.request_times and self.request_times[0] < now - self.window_size:
+                    self.request_times.popleft()
+                
+                # Check if we have room
+                if len(self.request_times) < self.max_rpm:
+                    # Record this request and exit
+                    self.request_times.append(now)
+                    self._total_requests += 1
+                    self._total_wait_time += total_wait
+                    return total_wait
+                
+                # At limit - calculate wait time until oldest request expires
                 oldest = self.request_times[0]
-                wait_time = (oldest + self.window_size) - now + 0.1  # Add 100ms buffer
+                wait_time = (oldest + self.window_size) - now + 0.05  # 50ms buffer
                 
                 if wait_time > 0:
-                    self._total_wait_time += wait_time
-                    # Release lock while waiting
+                    # Release lock, wait, then re-acquire and loop
                     self.lock.release()
                     try:
                         time.sleep(wait_time)
+                        total_wait += wait_time
                     finally:
                         self.lock.acquire()
-                    
-                    # Re-clean after waiting
-                    now = time.time()
-                    while self.request_times and self.request_times[0] < now - self.window_size:
-                        self.request_times.popleft()
-                    
-                    return wait_time
-            
-            # Record this request
-            self.request_times.append(now)
-            self._total_requests += 1
-            return 0.0
+                # Loop back to recheck (another thread might have taken the slot)
     
     def get_stats(self) -> dict:
         """Get rate limiter statistics."""
@@ -269,14 +268,26 @@ class GeminiInterface(LLMInterface):
         """
         Generate response using Google Gemini API.
         Handles empty or filtered responses safely.
+        
+        V7 Enhancement: Uses global rate limiter to prevent exceeding Gemini API limits.
         """
         try:
+            # V7: Apply rate limiting before making the request
+            wait_time = GLOBAL_RATE_LIMITER.wait_if_needed()
+            if wait_time > 0:
+                current_rate = GLOBAL_RATE_LIMITER.current_rate()
+                print(f"[GeminiInterface] Rate limited, waited {wait_time:.1f}s (current: {current_rate}/{GLOBAL_RATE_LIMITER.max_rpm} rpm)")
             
             response = self.model.generate_content(prompt)
             
             # Some responses might not have .text even if generation succeeded.
             if not hasattr(response, "candidates") or not response.candidates:
                 print("No candidates returned from Gemini. Retrying once...")
+                # V7: Rate limit the retry as well!
+                wait_time = GLOBAL_RATE_LIMITER.wait_if_needed()
+                if wait_time > 0:
+                    current_rate = GLOBAL_RATE_LIMITER.current_rate()
+                    print(f"[GeminiInterface] Rate limited retry, waited {wait_time:.1f}s (current: {current_rate}/{GLOBAL_RATE_LIMITER.max_rpm} rpm)")
                 response = self.model.generate_content(prompt)
             
             # Still no valid candidate → return empty safely.

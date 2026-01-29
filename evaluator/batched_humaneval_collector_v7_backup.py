@@ -71,7 +71,6 @@ with open(CONFIG_PATH, "r") as f:
 # Initialize tools
 c = Compiler()
 g = Ghidra()
-
 '''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
@@ -86,8 +85,7 @@ llm_interface = create_llm_interface(
     api_key=config["llm"]["gemini_api_key"]
 )
 
-
-set_global_rate_limit(40)  # 40 requests per minute
+set_global_rate_limit(10)
 
 corpus_path = Path(config["humaneval"]["corpus_path"])
 output_dir = Path(config["humaneval"]["output_path"])
@@ -392,7 +390,7 @@ def format_type_constraints_for_prompt(type_constraints: Dict, max_chars: int = 
         if first_constraint.get('source') == 'typehoon':
             # Format Typehoon constraints
             lines.append("TYPE CONSTRAINTS (from Typehoon analysis):")
-            lines.append("These types were inferred from binary analysis and should guide your implementation, however they may be wrong! ASM is your ultimate source of truth. I repeat, these may be wrong, asm is your ultimate source of truth!:")
+            lines.append("These types were inferred from binary analysis and should guide your implementation:")
             
             for constraint in type_constraints:
                 func_name = constraint.get('function_name', 'func0')
@@ -625,14 +623,14 @@ def get_initial_prompt(
     prompt = f"""{initial_prompt}
 
 ═══════════════════════════════════════════════════════════════════════════════
-IMPORTANT: Decompiler pseudocode is approximate - it may have reconstruction errors!
+⚠️ CRITICAL: Ghidra pseudocode is NOT ground truth - it may have ERRORS!
 ═══════════════════════════════════════════════════════════════════════════════
 
-The COMPILER OUTPUT below shows the TRUE behavior. Decompiler output may be wrong in:
+The ASSEMBLY below shows the TRUE behavior. Ghidra's output may be wrong in:
 
-Common decompiler reconstruction errors:
-• Wrong return type: void instead of int/float/double (check if value prepared for return)
-• Missing float ops: floating-point operations ignored → code appears integer-only
+ALTHOUGH UNLIKELY, STILL PLAUSIBLE - Ghidra common errors:
+• Wrong return type: void instead of int/float/double (check xmm0/eax before ret)
+• Missing float ops: addss/mulss/divss instructions ignored → code appears integer-only
 • Empty loop bodies: operations inside loops omitted entirely
 • Wrong param types: int instead of float*, long instead of size_t
 • Wrong param count: parameters missing or extra ones added
@@ -640,46 +638,46 @@ Common decompiler reconstruction errors:
 • Control flow errors: structured loops/ifs incorrectly recovered
 
 ═══════════════════════════════════════════════════════════════════════════════
-RETURN TYPE INFERENCE - CRITICAL (DECOMPILER OFTEN SAYS void INCORRECTLY)
+🚨 RETURN TYPE INFERENCE - CRITICAL (GHIDRA OFTEN SAYS void INCORRECTLY) 🚨
 ═══════════════════════════════════════════════════════════════════════════════
 
-CHECK COMPILER OUTPUT BEFORE RETURN:
-• FP register set before return → return type is FLOAT/DOUBLE, NOT void!
-• Integer register set before return → return type is INT/LONG, NOT void!
-• Division before return → likely returns float!
+CHECK ASSEMBLY BEFORE RET:
+• xmm0 set before ret → return type is FLOAT/DOUBLE, NOT void!
+• eax/rax set before ret → return type is INT/LONG, NOT void!
+• DIVSS xmm0 before ret → definitely returns float!
 
 USE SEMANTIC REASONING:
 • If function COMPUTES a value (sum, average, etc.) → it MUST return it!
 • If function has loops that accumulate → it returns the result!
-• If decompiler says "void" but function clearly computes → IGNORE decompiler, return the value!
+• If Ghidra says "void" but function clearly computes → IGNORE Ghidra, return the value!
 
-COMMON: Mean Absolute Deviation pattern (2 loops, 2 divisions) → returns FLOAT!
+COMMON: Mean Absolute Deviation pattern (2 loops, 2 divss) → returns FLOAT!
 
 ═══════════════════════════════════════════════════════════════════════════════
-C++ STL WARNING (Decompilers POORLY handle std::vector/string)
+🚨 C++ STL WARNING (Ghidra POORLY handles std::vector/string) 🚨
 ═══════════════════════════════════════════════════════════════════════════════
 
 For std::vector<float>:
-• Decompiler may say "void func(vector)" → actually "float func(vector<float>)"
-• Decompiler may show std::abs() called but result DISCARDED → WRONG, accumulate it!
-• If compiler output has FP loops → function returns float!
+• Ghidra may say "void func(vector)" → actually "float func(vector<float>)"
+• Ghidra may show std::abs() called but result DISCARDED → WRONG, accumulate it!
+• If assembly has addss/divss loops → function returns float!
 
-COMPILER OUTPUT HINTS:
-• FP operations → floating-point types REQUIRED
-• Int-to-float conversion → type conversion needed
-• FP register set before return → return type is float/double
-• Int register set before return → return type is int/long
-• Absolute value pattern → fabsf() operation
+ASSEMBLY INSTRUCTION HINTS:
+• movss/addss/mulss/divss → floating-point operations REQUIRED
+• cvtsi2ss → int to float conversion
+• xmm0 set before ret → return type is float/double
+• eax/rax set before ret → return type is int/long
+• ANDPS with 0x7fffffff → fabsf() absolute value operation
 
 ═══════════════════════════════════════════════════════════════════════════════
-COMPILER OUTPUT (GROUND TRUTH - this is what the code ACTUALLY does):
+ASSEMBLY (GROUND TRUTH - this is what the binary ACTUALLY does):
 ═══════════════════════════════════════════════════════════════════════════════
-```
+```asm
 {truncated_asm}
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-DECOMPILER PSEUDOCODE (MAY BE INCORRECT - use as rough guide only):
+GHIDRA PSEUDOCODE (MAY BE INCORRECT - use as rough guide only):
 ═══════════════════════════════════════════════════════════════════════════════
 ```{language}
 {c_code}
@@ -692,11 +690,11 @@ Function Summary: {function_summary}
     if signature_analysis:
         prompt += f"""
 ═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
+🔍 SIGNATURE ANALYSIS (LLM-as-judge - identified Ghidra errors):
 ═══════════════════════════════════════════════════════════════════════════════
 {signature_analysis[:1500]}
 
-USE THIS ANALYSIS! If it says decompiler's return type is WRONG, fix it!
+⚠️ USE THIS ANALYSIS! If it says Ghidra's return type is WRONG, fix it!
 """
     
     # V7: Add type constraints if available
@@ -719,14 +717,12 @@ def get_static_repair_prompt(
     caller_and_callee_summary: str, 
     function_sog: str, 
     type_constraints: Dict,
-    language: str,
-    asm: str = ""  # V7.3: Add assembly for better context
+    language: str
 ) -> str:
     """
     Generate the static repair prompt for compilation errors.
     
     V7 IMPROVEMENT: Includes type constraints to help fix type-related errors.
-    V7.3 IMPROVEMENT: Includes assembly (compiler output) for ground truth context.
     Many compilation errors are due to type mismatches that TypeForge can help resolve.
     """
     repair_prompt = config["prompts"]["compilation_error"]
@@ -740,16 +736,7 @@ def get_static_repair_prompt(
     if len(c_code) > MAX_CODE_CHARS:
         truncated_code += "\n// ... (code truncated)"
     
-    # V7.3: Truncate assembly but keep enough for context
-    truncated_asm = asm[:MAX_ASM_CHARS] if asm else ""
-    if asm and len(asm) > MAX_ASM_CHARS:
-        truncated_asm += "\n; ... (truncated)"
-    
     prompt = f"{repair_prompt}\n\n```{lang_label}\nLanguage:{language}\nSummary:{function_summary}\nCode:{truncated_code}\n```\n\nCompilation Errors:\n{truncated_errors}\n\nPlease provide the corrected {language.upper()} code."
-    
-    # V7.3: Add assembly for ground truth context
-    if truncated_asm:
-        prompt += f"\n\nCOMPILER OUTPUT (ground truth - shows what the code should actually do):\n```\n{truncated_asm}\n```"
     
     # V7: Add type constraints to help fix type errors
     type_str = format_type_constraints_for_prompt(type_constraints)
@@ -792,101 +779,102 @@ def get_semantic_repair_prompt(
     if original_asm and len(original_asm) > MAX_ASM_CHARS:
         truncated_asm += "\n; ... (assembly truncated)"
     
-    # Truncate decompiler code
+    # Truncate Ghidra code
     truncated_ghidra = original_ghidra[:MAX_CODE_CHARS] if original_ghidra else ""
     if original_ghidra and len(original_ghidra) > MAX_CODE_CHARS:
-        truncated_ghidra += "\n// ... (code truncated)"
+        truncated_ghidra += "\n// ... (Ghidra code truncated)"
     
     # Truncate current code
     truncated_current = current_code[:MAX_CODE_CHARS] if current_code else ""
     if current_code and len(current_code) > MAX_CODE_CHARS:
         truncated_current += "\n// ... (current code truncated)"
     
-    prompt = f"""You are fixing reconstructed code that produces WRONG outputs. The semantic verifier found behavioral differences.
+    prompt = f"""You are fixing decompiled code that produces WRONG outputs. The symbolic verifier found semantic differences.
 
 ═══════════════════════════════════════════════════════════════════════════════
-IMPORTANT: COMPILER OUTPUT IS GROUND TRUTH - Decompiler pseudocode is NOT reliable!
+CRITICAL: ASSEMBLY IS GROUND TRUTH - Ghidra pseudocode is NOT reliable!
 ═══════════════════════════════════════════════════════════════════════════════
 
-Decompiler output may be WRONG in any of these ways (common reconstruction errors):
+Ghidra's decompiler output may be WRONG in any of these ways (although each seems unlikely, they are PLAUSIBLE and COMMON):
 
-SIGNATURE ERRORS:
-• Wrong return type: void instead of int/float/double (check value before return)
+SIGNATURE ERRORS (ALTHOUGH UNLIKELY, STILL PLAUSIBLE):
+• Wrong return type: void instead of int/float/double (check xmm0/eax before ret)
 • Wrong parameter count: missing params or extra params
 • Wrong parameter types: int vs float*, long vs size_t, signed vs unsigned
 • Swapped parameters: argument order doesn't match actual use
 
-TYPE ERRORS:
+TYPE ERRORS (ALTHOUGH UNLIKELY, STILL PLAUSIBLE):
 • Pointer vs integer confusion: treating addresses as values
 • Signed vs unsigned: wrong signedness affects comparisons
-• Float vs int: missing floating-point ops
+• Float vs int: missing floating-point ops (look for addss/mulss/divss)
 • Array vs pointer: wrong indexing or stride
 
-CONTROL FLOW ERRORS:
+CONTROL FLOW ERRORS (ALTHOUGH UNLIKELY, STILL PLAUSIBLE):
 • Empty loop bodies: actual operations omitted
 • Wrong loop bounds: off-by-one, wrong direction
 • Missing branches: conditional code collapsed
 • Goto artifacts: structured control obscured
 
-DATA FLOW ERRORS:
+DATA FLOW ERRORS (ALTHOUGH UNLIKELY, STILL PLAUSIBLE):
 • Artificial temporaries: merged or split incorrectly  
 • Wrong variable identity: different vars confused
 • Missing operations: arithmetic silently dropped
 • Compiler artifacts: ABI/optimization noise kept
 
 ═══════════════════════════════════════════════════════════════════════════════
-RETURN TYPE INFERENCE - THE #1 CAUSE OF SEMANTIC FAILURES
+🚨 RETURN TYPE INFERENCE - THE #1 CAUSE OF SEMANTIC FAILURES 🚨
 ═══════════════════════════════════════════════════════════════════════════════
 
-CHECK COMPILER OUTPUT BEFORE RETURN:
-• If FP value prepared for return → return type is FLOAT or DOUBLE, NOT void!
-• If integer value prepared for return → return type is INT/LONG, NOT void!
-• Division before return → likely returns float/double!
+CHECK ASSEMBLY BEFORE RET INSTRUCTION:
+• If xmm0 has a value before RET → return type is FLOAT or DOUBLE, NOT void!
+• If eax/rax has a value before RET → return type is INT/LONG, NOT void!
+• If DIVSS xmm0 / DIVSD xmm0 before RET → definitely returns float/double!
+• PXOR xmm0,xmm0 + CVTSI2SS + DIVSS pattern → returns FLOAT!
 
-USE SEMANTIC REASONING (when unclear):
+USE SEMANTIC REASONING (when assembly is unclear):
 • If function COMPUTES something (sum, average, count, etc.) → it MUST return it!
 • If function has accumulator loops → it MUST return the accumulated value!
-• If decompiler shows computations but "return;" with no value → DECOMPILER IS WRONG!
+• If Ghidra shows computations but "return;" with no value → GHIDRA IS WRONG!
 • A function that computes but doesn't return makes NO SENSE → add return!
 
 COMMON PATTERN - Mean Absolute Deviation (MAD):
 • Loop 1: sum all elements, divide by count → mean
 • Loop 2: sum |element - mean| for all elements, divide by count → MAD
-• This function MUST return float, even if decompiler says void!
+• This function MUST return float, even if Ghidra says void!
 
 ═══════════════════════════════════════════════════════════════════════════════
-FLOATING-POINT DETECTION - NEVER USE INT FOR FLOAT OPERATIONS
+🚨 FLOATING-POINT DETECTION - NEVER USE INT FOR FLOAT ASSEMBLY 🚨
 ═══════════════════════════════════════════════════════════════════════════════
 
-If compiler output shows FP operations → use FLOAT types!
-If compiler output shows double operations → use DOUBLE types!
-If compiler output shows absolute value pattern → this is fabsf()!
-If compiler output shows int-to-float conversion → type conversion needed!
+If assembly contains ADDSS, SUBSS, MULSS, DIVSS, MOVSS → use FLOAT types!
+If assembly contains ADDSD, SUBSD, MULSD, DIVSD, MOVSD → use DOUBLE types!
+If assembly contains ANDPS with 0x7fffffff mask → this is fabsf() absolute value!
+If assembly contains CVTSI2SS → converting int to float!
 
-NEVER generate pointer arithmetic when compiler output shows float operations!
+NEVER generate pointer arithmetic (base + count*4) when assembly shows float operations!
 NEVER confuse array stride calculation with the actual computation!
 
 ═══════════════════════════════════════════════════════════════════════════════
-C++ STL RECOVERY (Decompilers lose std::vector/string semantics)
+C++ STL RECOVERY (Ghidra DESTROYS std::vector/string semantics)
 ═══════════════════════════════════════════════════════════════════════════════
 
 For C++ with std::vector<float>:
-• Decompiler may show "void func(vector)" but it should be "float func(vector<float>)"
-• Decompiler may discard return values from std::abs() - YOU MUST ACCUMULATE THEM
-• Decompiler may show operator[] calls but lose the accumulation logic
+• Ghidra may show "void func(vector)" but it should be "float func(vector<float>)"
+• Ghidra may discard return values from std::abs() - YOU MUST ACCUMULATE THEM
+• Ghidra may show operator[] calls but lose the accumulation logic
 
-If you see std::vector + FP operations → function returns float!
-If you see two loops with division → Mean Absolute Deviation, returns float!
+If you see std::vector + addss/divss assembly → function returns float!
+If you see two loops with divss → Mean Absolute Deviation, returns float!
 
 ═══════════════════════════════════════════════════════════════════════════════
-COMPILER OUTPUT (GROUND TRUTH - this is what the code ACTUALLY does):
+ASSEMBLY (GROUND TRUTH - this is what the binary ACTUALLY does):
 ═══════════════════════════════════════════════════════════════════════════════
-```
+```asm
 {truncated_asm}
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
-DECOMPILER PSEUDOCODE (UNRELIABLE - use as rough guide only, may be WRONG):
+GHIDRA PSEUDOCODE (UNRELIABLE - use as rough guide only, may be WRONG):
 ═══════════════════════════════════════════════════════════════════════════════
 ```{language}
 {truncated_ghidra}
@@ -901,7 +889,7 @@ YOUR CURRENT CODE (WRONG - produces incorrect output):
 
 Function Summary: {function_summary}
 
-VERIFICATION: DIFFERENT (your code doesn't match expected behavior)
+VERIFICATION: ✗ DIFFERENT (your code doesn't match the binary's behavior)
 """
     
     # V7.1: Add history of previous attempts to avoid repeating mistakes
@@ -923,22 +911,22 @@ VERIFICATION: DIFFERENT (your code doesn't match expected behavior)
     if type_str:
         prompt += f"""
 ═══════════════════════════════════════════════════════════════════════════════
-TYPE CONSTRAINTS (from static analysis - more reliable than decompiler):
+TYPE CONSTRAINTS (from binary analysis - more reliable than Ghidra):
 ═══════════════════════════════════════════════════════════════════════════════
 {type_str}
 
-USE THESE TYPES! If your types don't match, that's likely your bug.
+⚠️ USE THESE TYPES! If your types don't match, that's likely your bug.
 """
     
     # V7.2: Add LLM-as-judge signature analysis
     if signature_analysis:
         prompt += f"""
 ═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
+🔍 SIGNATURE ANALYSIS (LLM-as-judge identified these Ghidra errors):
 ═══════════════════════════════════════════════════════════════════════════════
 {signature_analysis[:1500]}
 
-THIS ANALYSIS IDENTIFIED SPECIFIC DECOMPILER ERRORS! Use it to fix your code.
+⚠️ THIS ANALYSIS IDENTIFIED SPECIFIC GHIDRA ERRORS! Use it to fix your code.
 If it says return type should be float (not void), CHANGE YOUR RETURN TYPE!
 """
     
@@ -968,18 +956,18 @@ If it says return type should be float (not void), CHANGE YOUR RETURN TYPE!
     
     prompt += """
 ═══════════════════════════════════════════════════════════════════════════════
-YOUR TASK: Fix the code to match expected behavior
+YOUR TASK: Fix the code to match ASSEMBLY behavior
 ═══════════════════════════════════════════════════════════════════════════════
 
 Steps:
-1. CHECK RETURN TYPE FIRST - if a value is prepared for return, function returns a value!
-2. If function COMPUTES something, it MUST RETURN it - ignore decompiler's void!
-3. Analyze the context to understand what the function REALLY does
-4. Use TYPE CONSTRAINTS if provided - they're more reliable than decompiler (BUT override void if semantics disagree)
+1. CHECK RETURN TYPE FIRST - if assembly has xmm0/eax before ret, function returns a value!
+2. If function COMPUTES something, it MUST RETURN it - ignore Ghidra's void!
+3. Analyze the ASSEMBLY to understand what the function REALLY does
+4. Use TYPE CONSTRAINTS if provided - they're more reliable than Ghidra (BUT override void if assembly disagrees)
 5. Check COUNTEREXAMPLES - understand WHY your code gives wrong output
 6. DO NOT repeat previous failed attempts - try a DIFFERENT approach
-7. For C++ STL: if FP operations are present, the function returns float even if decompiler says void!
-8. Rewrite based on semantic analysis, not decompiler artifacts
+7. For C++ STL: if assembly shows float ops, the function returns float even if Ghidra says void!
+8. Rewrite based on assembly semantics, not Ghidra artifacts
 
 Output ONLY the corrected function code. No explanations."""
     return prompt
@@ -1330,8 +1318,7 @@ def get_optimized_code_v7(
                     caller_and_callee_summary=caller_and_callee_summary,
                     function_sog=function_sog,
                     type_constraints=type_constraints,
-                    language=language,
-                    asm=original_asm  # V7.3: Add assembly for context
+                    language=language
                 )
                 
                 try:
@@ -1372,8 +1359,7 @@ def get_optimized_code_v7(
                         caller_and_callee_summary=caller_and_callee_summary,
                         function_sog=function_sog,
                         type_constraints=type_constraints,
-                        language=language,
-                        asm=original_asm  # V7.3: Add assembly for context
+                        language=language
                     )
                     try:
                         new_code = llm_interface.generate(repair_prompt)
@@ -1401,42 +1387,11 @@ def get_optimized_code_v7(
                 stats['final_result'] = 'equivalent'
                 return True, optimized_code, stats
             
-            # V7.3: Check for VexHelix compilation failure that wasn't caught above
-            # This happens when status is 'different' but there's a compilation_error
-            if vexhelix_result.compilation_error and not vexhelix_result.divergences:
-                print(f"{prefix} [Semantic] VexHelix compilation failed (uncaught), treating as 1000 divergences")
-                stats['divergence_history'].append(1000)  # Special value for compile error
-                # Try to repair and continue
-                stats['static_repair_iterations'] += 1
-                repair_prompt = get_static_repair_prompt(
-                    c_code=optimized_code,
-                    compilation_errors=vexhelix_result.compilation_error,
-                    function_summary=function_summary,
-                    caller_and_callee_summary=caller_and_callee_summary,
-                    function_sog=function_sog,
-                    type_constraints=type_constraints,
-                    language=language,
-                    asm=original_asm
-                )
-                try:
-                    new_code = llm_interface.generate(repair_prompt)
-                    if new_code.strip():
-                        optimized_code = new_code
-                except Exception as e:
-                    print(f"{prefix} [Semantic] LLM error on compile fix: {e}")
-                continue
-            
             # Code compiled and VexHelix ran - save as last known good
             last_compilable_code = optimized_code
             
             # Phase 3: Check for stagnation and track best code
             current_divergences = len(vexhelix_result.divergences or [])
-            
-            # V7.3: If no divergences but not equivalent, something's wrong - treat as error
-            if current_divergences == 0 and vexhelix_result.status != 'equivalent':
-                print(f"{prefix} [Semantic] ⚠ 0 divergences but not equivalent - treating as 1000")
-                current_divergences = 1000
-            
             stats['divergence_history'].append(current_divergences)
             print(f"{prefix} [Semantic] ✗ DIFFERENT - {current_divergences} divergences")
             
@@ -1608,7 +1563,6 @@ def batch_optimize_functions_v7(enriched_programs: List[Dict]) -> List[Dict]:
     Optimize multiple functions using STREAMING PARALLEL repair loops.
     
     V7: Uses TypeForge type constraints in addition to VexHelix verification.
-    V7.3: Results saved in batches after all items complete (not per-item).
     """
     global active_count, completed_count, total_tasks
     
@@ -2304,119 +2258,20 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
 
 
 # =============================================================================
-# MAIN PROCESSING - SEQUENTIAL BATCH MODE (V7.3)
-# =============================================================================
-# 
-# Changed from pipeline architecture to sequential batches of 20 to avoid
-# overwhelming GCP rate limits. Each batch completes fully before the next starts.
-#
-# Batch flow: COMPILE → GHIDRA → ENRICH → SUMMARY → OPTIMIZE
+# MAIN PROCESSING PIPELINE (V7)
 # =============================================================================
 
-BATCH_SIZE = 20  # Process 20 items at a time
-
-def process_batch_sequential_v7(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
-    """
-    Process a batch of items SEQUENTIALLY through all stages (V7.3).
-    
-    Unlike the pipeline architecture, this completes each stage fully
-    before moving to the next. This is safer for rate limiting.
-    
-    Stages:
-    1. Compile all items
-    2. Ghidra analysis on successful compilations
-    3. Enrich with TypeForge constraints
-    4. Generate summaries
-    5. Run optimization with VexHelix
-    
-    Returns:
-        List of results (saved by caller after batch completes)
-    """
-    total = len(batch_items)
-    
-    print(f"\n{'='*70}")
-    print(f"[BATCH V7.3] Sequential Batch Processing with TypeForge + VexHelix")
-    print(f"{'='*70}")
-    print(f"  Total programs: {total}")
-    print(f"  Rate Limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
-    print(f"{'='*70}\n")
-    
-    # Stage 1: Compile all programs
-    print(f"[Stage 1/5] Compiling {total} programs...")
-    compile_results = batch_compile_programs(batch_items, temp_base_dir)
-    
-    # Filter successful compilations
-    successful_compilations = [(r.index, r.executable_path, r) for r in compile_results if r.success]
-    
-    if not successful_compilations:
-        print("[BATCH] No successful compilations in this batch")
-        return []
-    
-    print(f"[Stage 1/5] ✓ {len(successful_compilations)}/{total} compiled successfully")
-    
-    # Stage 2: Ghidra analysis
-    print(f"\n[Stage 2/5] Running decompiler analysis on {len(successful_compilations)} binaries...")
-    ghidra_input = [(idx, exe_path) for idx, exe_path, _ in successful_compilations]
-    ghidra_results = batch_ghidra_analysis(ghidra_input)
-    print(f"[Stage 2/5] ✓ Decompiler analysis complete")
-    
-    # Stage 3: Enrich with TypeForge
-    print(f"\n[Stage 3/5] Enriching with TypeForge constraints...")
-    enriched_programs = []
-    type_constraint_count = 0
-    
-    for idx, exe_path, compile_result in successful_compilations:
-        ghidra_result = ghidra_results.get(idx)
-        if ghidra_result is None:
-            print(f"  [SKIP] No decompiler result for index {idx}")
-            continue
-        
-        enriched_data = split_enrichment(compile_result.data, ghidra_result, exe_path)
-        enriched_programs.append(enriched_data)
-        
-        # Count TypeForge constraints
-        for func_data in enriched_data.get('functions', []):
-            if func_data.get('type_constraints'):
-                type_constraint_count += 1
-    
-    print(f"[Stage 3/5] ✓ Enriched {len(enriched_programs)} programs ({type_constraint_count} with TypeForge constraints)")
-    
-    # Stage 4 & 5: Summaries + Optimization (handled by batch_optimize_functions_v7)
-    print(f"\n[Stage 4-5/5] Generating summaries and running optimization...")
-    optimized_programs = batch_optimize_functions_v7(enriched_programs)
-    
-    # V7.3: Results are returned and saved in batches by caller (process_humaneval_decompile)
-    
-    # Summary statistics
-    equivalent_count = sum(1 for r in optimized_programs 
-                          if r.get('functions') and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
-    
-    rl_stats = GLOBAL_RATE_LIMITER.get_stats()
-    
-    print(f"\n{'='*70}")
-    print(f"[BATCH V7.3] Batch Complete!")
-    print(f"{'='*70}")
-    print(f"  Processed: {len(optimized_programs)}/{total}")
-    print(f"  Equivalent: {equivalent_count}/{len(optimized_programs)}")
-    print(f"  LLM requests: {rl_stats['total_requests']}")
-    print(f"  LLM wait time: {rl_stats['total_wait_time_seconds']:.1f}s")
-    print(f"{'='*70}\n")
-    
-    return optimized_programs
-
-
-def process_batch(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
+def process_batch(batch_items: List[Dict], temp_base_dir: Path, incremental_save_dir: Path = None) -> Tuple[List[Dict], Path]:
     """
     Process a batch of items through the V7 pipeline.
     
-    V7.3: Now uses SEQUENTIAL BATCH processing to avoid rate limit issues.
-    Results saved by caller (process_humaneval_decompile) after each batch.
+    NOW USES TRUE PIPELINED ARCHITECTURE for maximum throughput.
     
     Returns:
-        List of results
+        Tuple of (results list, incremental_save_dir path)
     """
-    # V7.3: Use sequential batch processing (safer for rate limits)
-    return process_batch_sequential_v7(batch_items, temp_base_dir)
+    # V7: Use true pipelined architecture for maximum throughput
+    return process_batch_pipelined_v7(batch_items, temp_base_dir, incremental_save_dir)
 
 
 def save_results(results: List[Dict], output_file_path: Path):
@@ -2434,21 +2289,19 @@ def save_results(results: List[Dict], output_file_path: Path):
 
 def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
     """
-    Process the humaneval decompile json file with SEQUENTIAL BATCH architecture (V7.3).
+    Process the humaneval decompile json file with TRUE PIPELINED architecture.
     
-    V7.3 CHANGE: Now processes in batches of 20 to avoid overwhelming GCP rate limits.
-    Each batch completes fully before starting the next.
+    NO BATCH LOOPS! All items flow through the pipeline at once.
+    Each stage controls its own parallelism:
+      COMPILE (20) → GHIDRA (12) → SUMMARY (12) → VEXHELIX (12)
     
-    This is safer than the pipeline architecture because:
-    - Predictable LLM request rate (controlled within each batch)
-    - Easier to resume if interrupted
-    - Less risk of rate limit violations
+    This means while item 1 is in VEXHELIX, item 25 can be in COMPILE!
     
-    V7 improvements:
+    V7 improvements over V6:
     - TypeForge type constraints integrated
     - Enhanced prompts for type-aware repair
     - Better synergy between VexHelix and TypeForge
-    - Global rate limiter (40 RPM default)
+    - Global rate limiter for LLM requests
     """
     output_file_path = output_dir / "batched_enriched_humaneval_decompile_v7.json"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2470,52 +2323,45 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     c_count = sum(1 for d in humaneval_data if d['language'] == 'c')
     cpp_count = sum(1 for d in humaneval_data if d['language'] == 'cpp')
     
-    total_batches = (len(humaneval_data) + BATCH_SIZE - 1) // BATCH_SIZE
-    
     print(f"\n{'='*70}")
-    print(f"MissionDecompile V7.3 - SEQUENTIAL BATCH Architecture")
+    print(f"MissionDecompile V7 - TRUE PIPELINED Architecture")
     print(f"{'='*70}")
-    print(f"Processing {len(humaneval_data)} functions in batches of {BATCH_SIZE}")
-    print(f"  - Total batches: {total_batches}")
+    print(f"Processing {len(humaneval_data)} functions (ALL AT ONCE through pipeline)")
     print(f"  - C programs: {c_count}")
     print(f"  - C++ programs: {cpp_count}")
     print(f"VexHelix API: {VEXHELIX_API_URL}")
     print(f"TypeForge path: {corpus_path / 'typeforge'}")
-    print(f"Rate limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
-    print(f"Output file: {output_file_path}")
+    print(f"Pipeline stage widths:")
+    print(f"  COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
+    print(f"  GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
+    print(f"  SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers (LLM)")
+    print(f"  VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers (LLM repair loop)")
     print(f"{'='*70}\n")
     
-    all_results = []
+    # V7: Create timestamped directory for this run
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = output_dir / f"run_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[RUN] Results will be saved incrementally to: {run_dir}")
     
     with tempfile.TemporaryDirectory() as temp_base_dir:
         temp_base_path = Path(temp_base_dir)
         
-        # V7.3: Process in batches of BATCH_SIZE (20)
-        for batch_idx in range(0, len(humaneval_data), BATCH_SIZE):
-            batch_num = batch_idx // BATCH_SIZE + 1
-            batch_items = humaneval_data[batch_idx:batch_idx + BATCH_SIZE]
-            
-            print(f"\n{'='*70}")
-            print(f"BATCH {batch_num}/{total_batches}: Processing items {batch_idx} to {batch_idx + len(batch_items) - 1}")
-            print(f"{'='*70}\n")
-            
-            batch_results = process_batch(batch_items, temp_base_path)
-            all_results.extend(batch_results)
-            
-            # V7.3: Save to single file after each batch (batch saves like v4)
-            if batch_results:
-                save_results(batch_results, output_file_path)
-                print(f"\n[SAVE] ✓ Saved {len(batch_results)} results from batch {batch_num} to {output_file_path.name}")
-    
-    # Final summary
-    equivalent_count = sum(1 for r in all_results 
-                          if r.get('functions') and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+        # NO BATCH LOOP! Feed ALL items into the pipeline at once
+        # The pipeline stages control parallelism internally via queues
+        # While item #1 is in VexHelix, item #50 can be compiling!
+        all_results, save_dir = process_batch(humaneval_data, temp_base_path, run_dir)
+        
+        # Also save to the legacy location for backwards compatibility
+        if all_results:
+            save_results(all_results, output_file_path)
+            print(f"\n[Save] Also saved {len(all_results)} results to legacy path: {output_file_path}")
     
     print(f"\n{'='*70}")
     print(f"Processing complete!")
-    print(f"  Total processed: {len(all_results)}/{len(humaneval_data)}")
-    print(f"  Total equivalent: {equivalent_count}/{len(all_results)}")
-    print(f"  Results saved: {output_file_path}")
+    print(f"  Incremental results: {run_dir}")
+    print(f"  Combined results: {run_dir / 'combined_results.json'}")
+    print(f"  Legacy path: {output_file_path}")
     print(f"{'='*70}\n")
 
 
@@ -2548,10 +2394,10 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="MissionDecompile V7 - TypeForge + VexHelix Integration")
-    parser.add_argument("--start", type=int, default=600, help="Starting index")
+    parser.add_argument("--start", type=int, default=0, help="Starting index")
     parser.add_argument("--limit", type=int, default=None, help="Maximum items to process")
     parser.add_argument("--skip-api-check", action="store_true", help="Skip VexHelix API check")
-    parser.add_argument("--rate-limit", type=int, default=40, help="Max LLM requests per minute (default: 40)")
+    parser.add_argument("--rate-limit", type=int, default=150, help="Max LLM requests per minute (default: 150)")
     args = parser.parse_args()
     
     # V7: Configure rate limiter

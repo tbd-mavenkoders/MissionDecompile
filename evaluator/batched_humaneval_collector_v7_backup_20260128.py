@@ -71,7 +71,6 @@ with open(CONFIG_PATH, "r") as f:
 # Initialize tools
 c = Compiler()
 g = Ghidra()
-
 '''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
@@ -85,7 +84,6 @@ llm_interface = create_llm_interface(
     model_name=config["llm"]["gemini_model_name"],
     api_key=config["llm"]["gemini_api_key"]
 )
-
 
 set_global_rate_limit(40)  # 40 requests per minute
 
@@ -392,7 +390,7 @@ def format_type_constraints_for_prompt(type_constraints: Dict, max_chars: int = 
         if first_constraint.get('source') == 'typehoon':
             # Format Typehoon constraints
             lines.append("TYPE CONSTRAINTS (from Typehoon analysis):")
-            lines.append("These types were inferred from binary analysis and should guide your implementation, however they may be wrong! ASM is your ultimate source of truth. I repeat, these may be wrong, asm is your ultimate source of truth!:")
+            lines.append("These types were inferred from binary analysis and should guide your implementation:")
             
             for constraint in type_constraints:
                 func_name = constraint.get('function_name', 'func0')
@@ -719,14 +717,12 @@ def get_static_repair_prompt(
     caller_and_callee_summary: str, 
     function_sog: str, 
     type_constraints: Dict,
-    language: str,
-    asm: str = ""  # V7.3: Add assembly for better context
+    language: str
 ) -> str:
     """
     Generate the static repair prompt for compilation errors.
     
     V7 IMPROVEMENT: Includes type constraints to help fix type-related errors.
-    V7.3 IMPROVEMENT: Includes assembly (compiler output) for ground truth context.
     Many compilation errors are due to type mismatches that TypeForge can help resolve.
     """
     repair_prompt = config["prompts"]["compilation_error"]
@@ -740,16 +736,7 @@ def get_static_repair_prompt(
     if len(c_code) > MAX_CODE_CHARS:
         truncated_code += "\n// ... (code truncated)"
     
-    # V7.3: Truncate assembly but keep enough for context
-    truncated_asm = asm[:MAX_ASM_CHARS] if asm else ""
-    if asm and len(asm) > MAX_ASM_CHARS:
-        truncated_asm += "\n; ... (truncated)"
-    
     prompt = f"{repair_prompt}\n\n```{lang_label}\nLanguage:{language}\nSummary:{function_summary}\nCode:{truncated_code}\n```\n\nCompilation Errors:\n{truncated_errors}\n\nPlease provide the corrected {language.upper()} code."
-    
-    # V7.3: Add assembly for ground truth context
-    if truncated_asm:
-        prompt += f"\n\nCOMPILER OUTPUT (ground truth - shows what the code should actually do):\n```\n{truncated_asm}\n```"
     
     # V7: Add type constraints to help fix type errors
     type_str = format_type_constraints_for_prompt(type_constraints)
@@ -792,10 +779,10 @@ def get_semantic_repair_prompt(
     if original_asm and len(original_asm) > MAX_ASM_CHARS:
         truncated_asm += "\n; ... (assembly truncated)"
     
-    # Truncate decompiler code
+    # Truncate Ghidra code
     truncated_ghidra = original_ghidra[:MAX_CODE_CHARS] if original_ghidra else ""
     if original_ghidra and len(original_ghidra) > MAX_CODE_CHARS:
-        truncated_ghidra += "\n// ... (code truncated)"
+        truncated_ghidra += "\n// ... (Ghidra code truncated)"
     
     # Truncate current code
     truncated_current = current_code[:MAX_CODE_CHARS] if current_code else ""
@@ -1330,8 +1317,7 @@ def get_optimized_code_v7(
                     caller_and_callee_summary=caller_and_callee_summary,
                     function_sog=function_sog,
                     type_constraints=type_constraints,
-                    language=language,
-                    asm=original_asm  # V7.3: Add assembly for context
+                    language=language
                 )
                 
                 try:
@@ -1372,8 +1358,7 @@ def get_optimized_code_v7(
                         caller_and_callee_summary=caller_and_callee_summary,
                         function_sog=function_sog,
                         type_constraints=type_constraints,
-                        language=language,
-                        asm=original_asm  # V7.3: Add assembly for context
+                        language=language
                     )
                     try:
                         new_code = llm_interface.generate(repair_prompt)
@@ -1401,42 +1386,11 @@ def get_optimized_code_v7(
                 stats['final_result'] = 'equivalent'
                 return True, optimized_code, stats
             
-            # V7.3: Check for VexHelix compilation failure that wasn't caught above
-            # This happens when status is 'different' but there's a compilation_error
-            if vexhelix_result.compilation_error and not vexhelix_result.divergences:
-                print(f"{prefix} [Semantic] VexHelix compilation failed (uncaught), treating as 1000 divergences")
-                stats['divergence_history'].append(1000)  # Special value for compile error
-                # Try to repair and continue
-                stats['static_repair_iterations'] += 1
-                repair_prompt = get_static_repair_prompt(
-                    c_code=optimized_code,
-                    compilation_errors=vexhelix_result.compilation_error,
-                    function_summary=function_summary,
-                    caller_and_callee_summary=caller_and_callee_summary,
-                    function_sog=function_sog,
-                    type_constraints=type_constraints,
-                    language=language,
-                    asm=original_asm
-                )
-                try:
-                    new_code = llm_interface.generate(repair_prompt)
-                    if new_code.strip():
-                        optimized_code = new_code
-                except Exception as e:
-                    print(f"{prefix} [Semantic] LLM error on compile fix: {e}")
-                continue
-            
             # Code compiled and VexHelix ran - save as last known good
             last_compilable_code = optimized_code
             
             # Phase 3: Check for stagnation and track best code
             current_divergences = len(vexhelix_result.divergences or [])
-            
-            # V7.3: If no divergences but not equivalent, something's wrong - treat as error
-            if current_divergences == 0 and vexhelix_result.status != 'equivalent':
-                print(f"{prefix} [Semantic] ⚠ 0 divergences but not equivalent - treating as 1000")
-                current_divergences = 1000
-            
             stats['divergence_history'].append(current_divergences)
             print(f"{prefix} [Semantic] ✗ DIFFERENT - {current_divergences} divergences")
             
@@ -1608,7 +1562,6 @@ def batch_optimize_functions_v7(enriched_programs: List[Dict]) -> List[Dict]:
     Optimize multiple functions using STREAMING PARALLEL repair loops.
     
     V7: Uses TypeForge type constraints in addition to VexHelix verification.
-    V7.3: Results saved in batches after all items complete (not per-item).
     """
     global active_count, completed_count, total_tasks
     
@@ -2304,119 +2257,20 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
 
 
 # =============================================================================
-# MAIN PROCESSING - SEQUENTIAL BATCH MODE (V7.3)
-# =============================================================================
-# 
-# Changed from pipeline architecture to sequential batches of 20 to avoid
-# overwhelming GCP rate limits. Each batch completes fully before the next starts.
-#
-# Batch flow: COMPILE → GHIDRA → ENRICH → SUMMARY → OPTIMIZE
+# MAIN PROCESSING PIPELINE (V7)
 # =============================================================================
 
-BATCH_SIZE = 20  # Process 20 items at a time
-
-def process_batch_sequential_v7(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
-    """
-    Process a batch of items SEQUENTIALLY through all stages (V7.3).
-    
-    Unlike the pipeline architecture, this completes each stage fully
-    before moving to the next. This is safer for rate limiting.
-    
-    Stages:
-    1. Compile all items
-    2. Ghidra analysis on successful compilations
-    3. Enrich with TypeForge constraints
-    4. Generate summaries
-    5. Run optimization with VexHelix
-    
-    Returns:
-        List of results (saved by caller after batch completes)
-    """
-    total = len(batch_items)
-    
-    print(f"\n{'='*70}")
-    print(f"[BATCH V7.3] Sequential Batch Processing with TypeForge + VexHelix")
-    print(f"{'='*70}")
-    print(f"  Total programs: {total}")
-    print(f"  Rate Limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
-    print(f"{'='*70}\n")
-    
-    # Stage 1: Compile all programs
-    print(f"[Stage 1/5] Compiling {total} programs...")
-    compile_results = batch_compile_programs(batch_items, temp_base_dir)
-    
-    # Filter successful compilations
-    successful_compilations = [(r.index, r.executable_path, r) for r in compile_results if r.success]
-    
-    if not successful_compilations:
-        print("[BATCH] No successful compilations in this batch")
-        return []
-    
-    print(f"[Stage 1/5] ✓ {len(successful_compilations)}/{total} compiled successfully")
-    
-    # Stage 2: Ghidra analysis
-    print(f"\n[Stage 2/5] Running decompiler analysis on {len(successful_compilations)} binaries...")
-    ghidra_input = [(idx, exe_path) for idx, exe_path, _ in successful_compilations]
-    ghidra_results = batch_ghidra_analysis(ghidra_input)
-    print(f"[Stage 2/5] ✓ Decompiler analysis complete")
-    
-    # Stage 3: Enrich with TypeForge
-    print(f"\n[Stage 3/5] Enriching with TypeForge constraints...")
-    enriched_programs = []
-    type_constraint_count = 0
-    
-    for idx, exe_path, compile_result in successful_compilations:
-        ghidra_result = ghidra_results.get(idx)
-        if ghidra_result is None:
-            print(f"  [SKIP] No decompiler result for index {idx}")
-            continue
-        
-        enriched_data = split_enrichment(compile_result.data, ghidra_result, exe_path)
-        enriched_programs.append(enriched_data)
-        
-        # Count TypeForge constraints
-        for func_data in enriched_data.get('functions', []):
-            if func_data.get('type_constraints'):
-                type_constraint_count += 1
-    
-    print(f"[Stage 3/5] ✓ Enriched {len(enriched_programs)} programs ({type_constraint_count} with TypeForge constraints)")
-    
-    # Stage 4 & 5: Summaries + Optimization (handled by batch_optimize_functions_v7)
-    print(f"\n[Stage 4-5/5] Generating summaries and running optimization...")
-    optimized_programs = batch_optimize_functions_v7(enriched_programs)
-    
-    # V7.3: Results are returned and saved in batches by caller (process_humaneval_decompile)
-    
-    # Summary statistics
-    equivalent_count = sum(1 for r in optimized_programs 
-                          if r.get('functions') and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
-    
-    rl_stats = GLOBAL_RATE_LIMITER.get_stats()
-    
-    print(f"\n{'='*70}")
-    print(f"[BATCH V7.3] Batch Complete!")
-    print(f"{'='*70}")
-    print(f"  Processed: {len(optimized_programs)}/{total}")
-    print(f"  Equivalent: {equivalent_count}/{len(optimized_programs)}")
-    print(f"  LLM requests: {rl_stats['total_requests']}")
-    print(f"  LLM wait time: {rl_stats['total_wait_time_seconds']:.1f}s")
-    print(f"{'='*70}\n")
-    
-    return optimized_programs
-
-
-def process_batch(batch_items: List[Dict], temp_base_dir: Path) -> List[Dict]:
+def process_batch(batch_items: List[Dict], temp_base_dir: Path, incremental_save_dir: Path = None) -> Tuple[List[Dict], Path]:
     """
     Process a batch of items through the V7 pipeline.
     
-    V7.3: Now uses SEQUENTIAL BATCH processing to avoid rate limit issues.
-    Results saved by caller (process_humaneval_decompile) after each batch.
+    NOW USES TRUE PIPELINED ARCHITECTURE for maximum throughput.
     
     Returns:
-        List of results
+        Tuple of (results list, incremental_save_dir path)
     """
-    # V7.3: Use sequential batch processing (safer for rate limits)
-    return process_batch_sequential_v7(batch_items, temp_base_dir)
+    # V7: Use true pipelined architecture for maximum throughput
+    return process_batch_pipelined_v7(batch_items, temp_base_dir, incremental_save_dir)
 
 
 def save_results(results: List[Dict], output_file_path: Path):
@@ -2434,21 +2288,19 @@ def save_results(results: List[Dict], output_file_path: Path):
 
 def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
     """
-    Process the humaneval decompile json file with SEQUENTIAL BATCH architecture (V7.3).
+    Process the humaneval decompile json file with TRUE PIPELINED architecture.
     
-    V7.3 CHANGE: Now processes in batches of 20 to avoid overwhelming GCP rate limits.
-    Each batch completes fully before starting the next.
+    NO BATCH LOOPS! All items flow through the pipeline at once.
+    Each stage controls its own parallelism:
+      COMPILE (20) → GHIDRA (12) → SUMMARY (12) → VEXHELIX (12)
     
-    This is safer than the pipeline architecture because:
-    - Predictable LLM request rate (controlled within each batch)
-    - Easier to resume if interrupted
-    - Less risk of rate limit violations
+    This means while item 1 is in VEXHELIX, item 25 can be in COMPILE!
     
-    V7 improvements:
+    V7 improvements over V6:
     - TypeForge type constraints integrated
     - Enhanced prompts for type-aware repair
     - Better synergy between VexHelix and TypeForge
-    - Global rate limiter (40 RPM default)
+    - Global rate limiter for LLM requests
     """
     output_file_path = output_dir / "batched_enriched_humaneval_decompile_v7.json"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2470,52 +2322,45 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     c_count = sum(1 for d in humaneval_data if d['language'] == 'c')
     cpp_count = sum(1 for d in humaneval_data if d['language'] == 'cpp')
     
-    total_batches = (len(humaneval_data) + BATCH_SIZE - 1) // BATCH_SIZE
-    
     print(f"\n{'='*70}")
-    print(f"MissionDecompile V7.3 - SEQUENTIAL BATCH Architecture")
+    print(f"MissionDecompile V7 - TRUE PIPELINED Architecture")
     print(f"{'='*70}")
-    print(f"Processing {len(humaneval_data)} functions in batches of {BATCH_SIZE}")
-    print(f"  - Total batches: {total_batches}")
+    print(f"Processing {len(humaneval_data)} functions (ALL AT ONCE through pipeline)")
     print(f"  - C programs: {c_count}")
     print(f"  - C++ programs: {cpp_count}")
     print(f"VexHelix API: {VEXHELIX_API_URL}")
     print(f"TypeForge path: {corpus_path / 'typeforge'}")
-    print(f"Rate limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
-    print(f"Output file: {output_file_path}")
+    print(f"Pipeline stage widths:")
+    print(f"  COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
+    print(f"  GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
+    print(f"  SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers (LLM)")
+    print(f"  VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers (LLM repair loop)")
     print(f"{'='*70}\n")
     
-    all_results = []
+    # V7: Create timestamped directory for this run
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = output_dir / f"run_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[RUN] Results will be saved incrementally to: {run_dir}")
     
     with tempfile.TemporaryDirectory() as temp_base_dir:
         temp_base_path = Path(temp_base_dir)
         
-        # V7.3: Process in batches of BATCH_SIZE (20)
-        for batch_idx in range(0, len(humaneval_data), BATCH_SIZE):
-            batch_num = batch_idx // BATCH_SIZE + 1
-            batch_items = humaneval_data[batch_idx:batch_idx + BATCH_SIZE]
-            
-            print(f"\n{'='*70}")
-            print(f"BATCH {batch_num}/{total_batches}: Processing items {batch_idx} to {batch_idx + len(batch_items) - 1}")
-            print(f"{'='*70}\n")
-            
-            batch_results = process_batch(batch_items, temp_base_path)
-            all_results.extend(batch_results)
-            
-            # V7.3: Save to single file after each batch (batch saves like v4)
-            if batch_results:
-                save_results(batch_results, output_file_path)
-                print(f"\n[SAVE] ✓ Saved {len(batch_results)} results from batch {batch_num} to {output_file_path.name}")
-    
-    # Final summary
-    equivalent_count = sum(1 for r in all_results 
-                          if r.get('functions') and r['functions'][0].get('optimization_stats', {}).get('final_result') == 'equivalent')
+        # NO BATCH LOOP! Feed ALL items into the pipeline at once
+        # The pipeline stages control parallelism internally via queues
+        # While item #1 is in VexHelix, item #50 can be compiling!
+        all_results, save_dir = process_batch(humaneval_data, temp_base_path, run_dir)
+        
+        # Also save to the legacy location for backwards compatibility
+        if all_results:
+            save_results(all_results, output_file_path)
+            print(f"\n[Save] Also saved {len(all_results)} results to legacy path: {output_file_path}")
     
     print(f"\n{'='*70}")
     print(f"Processing complete!")
-    print(f"  Total processed: {len(all_results)}/{len(humaneval_data)}")
-    print(f"  Total equivalent: {equivalent_count}/{len(all_results)}")
-    print(f"  Results saved: {output_file_path}")
+    print(f"  Incremental results: {run_dir}")
+    print(f"  Combined results: {run_dir / 'combined_results.json'}")
+    print(f"  Legacy path: {output_file_path}")
     print(f"{'='*70}\n")
 
 
@@ -2548,7 +2393,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="MissionDecompile V7 - TypeForge + VexHelix Integration")
-    parser.add_argument("--start", type=int, default=600, help="Starting index")
+    parser.add_argument("--start", type=int, default=0, help="Starting index")
     parser.add_argument("--limit", type=int, default=None, help="Maximum items to process")
     parser.add_argument("--skip-api-check", action="store_true", help="Skip VexHelix API check")
     parser.add_argument("--rate-limit", type=int, default=40, help="Max LLM requests per minute (default: 40)")

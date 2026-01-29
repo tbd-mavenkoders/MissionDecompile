@@ -8,6 +8,7 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+venv*/
 env/
 ENV/
 .Python
@@ -56,3 +57,5 @@ data/humaneval-decompile/*.cpp
 data/exebench/*
 !data/humaneval-decompile/humaneval-decompile.json
 !data/exebench/README.md
+
+*.yaml
