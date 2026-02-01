@@ -120,7 +120,7 @@ def extract_cfg(func, program, monitor):
 # Write all functions
 monitor = getMonitor()
 program = currentProgram
-outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/humaneval-decompile/SOG"
+outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Evaluation/gptoss/VERITAS/output/humaneval-decompile/SOG"
 outdir = os.path.join(outdir, program.getName())
 os.mkdir(outdir) if not os.path.exists(outdir) else None
 

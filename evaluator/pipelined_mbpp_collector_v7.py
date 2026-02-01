@@ -79,8 +79,8 @@ llm_interface = create_llm_interface(
 # PIPELINED VERSION: Effectively unlimited rate limit for local model
 set_global_rate_limit(100000)  # 100k requests per minute = effectively unlimited
 
-corpus_path = Path(config["humaneval"]["corpus_path"])
-output_dir = Path(config["humaneval"]["output_path"])
+corpus_path = Path(config["mbpp"]["corpus_path"])
+output_dir = Path(config["mbpp"]["output_path"])
 
 # Thread-safe progress tracking
 print_lock = threading.Lock()
@@ -1144,7 +1144,7 @@ def batch_ghidra_analysis(executables: List[Tuple[int, Path]]) -> Dict[int, Dict
 def analyze_single_executable(idx: int, exe_path: Path, cfg_script: Path, callgraph_script: Path) -> Dict:
     """Analyze a single executable with Ghidra."""
     executable_name = exe_path.stem
-    output_dir_path = Path(config["humaneval"]["output_path"]) / "SOG" / executable_name
+    output_dir_path = Path(config["mbpp"]["output_path"]) / "SOG" / executable_name
     if output_dir_path.exists():
         shutil.rmtree(output_dir_path)
     output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -2532,7 +2532,7 @@ def main():
     
     # Note: Rate limit already set to 100000 (effectively unlimited) at module load
     
-    json_path = corpus_path / "humaneval-decompile.json"
+    json_path = corpus_path / "mbpp-decompile.json"
     
     if not json_path.exists():
         print(f"✗ Dataset not found: {json_path}")

@@ -125,7 +125,7 @@ program = currentProgram
 if len(getScriptArgs()) > 0:
     outdir = getScriptArgs()[0]
 else:
-    outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v7-TFandVEX/MissionDecompile-v7/output/humaneval-decompile/SOG"
+    outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Evaluation/gptoss/VERITAS/output/humaneval-decompile/SOG"
 
 outdir = os.path.join(outdir, program.getName())
 if not os.path.exists(outdir):

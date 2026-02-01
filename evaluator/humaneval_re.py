@@ -188,7 +188,8 @@ def main():
   """
   
   corpus_file = corpus_path / "humaneval-decompile.json"
-  output_file = output_path / "batched_enriched_humaneval_decompile_v7.json"
+  #output_file = output_path / "batched_enriched_humaneval_decompile_v7.json"
+  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Evaluation/gptoss/VERITAS/output/humaneval-decompile/run_20260131_195552/combined_results.json"
   stats = process_json_file(corpus_file, output_file)
         
 
