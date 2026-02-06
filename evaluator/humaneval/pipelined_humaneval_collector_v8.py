@@ -12,10 +12,10 @@ Key differences from pipelined_humaneval_collector_v7.py:
 
 Features:
 - PRE-COMPUTED GEMINI SIGNATURES (reliable type information)
-- TYPE CONSTRAINTS from TypeForge (addresses VexHelix's type inference limitations)
+- TYPE CONSTRAINTS from TypeForge (addresses vexsym's type inference limitations)
 - ASM-BASED VERIFICATION PROTOCOL (4 heuristics for C type validation)
 - Static repair (ensure compilation)
-- Semantic verification via VexHelix API (ensure logical correctness)
+- Semantic verification via vexsym API (ensure logical correctness)
 - Semantic repair loop with type-aware prompts
 - FULL C and C++ support
 - TRUE PIPELINED parallel execution (like CPU pipeline)
@@ -23,11 +23,11 @@ Features:
 
 Pipeline Architecture:
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│  COMPILE    │──►│   GHIDRA    │──►│  SUMMARIES  │──►│  VEXHELIX   │
+│  COMPILE    │──►│   GHIDRA    │──►│  SUMMARIES  │──►│  vexsym   │
 │  width=20   │   │  width=12   │   │  width=12   │   │  width=12   │
 └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
      ↑                  ↑                 ↑                  ↑
- compile_q          ghidra_q          summary_q          vexhelix_q
+ compile_q          ghidra_q          summary_q          vexsym_q
 """
 
 import yaml
@@ -175,12 +175,12 @@ total_tasks = 0
 # =============================================================================
 
 # PIPELINE STAGE WIDTHS (like CPU pipeline - each stage has its own parallelism)
-# Items flow through: COMPILE → GHIDRA → SUMMARY → VEXHELIX
+# Items flow through: COMPILE → GHIDRA → SUMMARY → vexsym
 # IMPORTANT: LLM can only handle 24 concurrent requests total!
 PIPELINE_COMPILE_WIDTH = 24   #20 Compile is fast (gcc subprocess)
 PIPELINE_GHIDRA_WIDTH = 24    #24 Ghidra is memory-heavy, limit parallelism
 PIPELINE_SUMMARY_WIDTH = 24   # LLM bound: 12 concurrent summary requests
-PIPELINE_VEXHELIX_WIDTH = 24  # LLM bound: 12 concurrent repair loops (each uses LLM)
+PIPELINE_vexsym_WIDTH = 24  # LLM bound: 12 concurrent repair loops (each uses LLM)
 
 # Legacy batching configuration
 COMPILATION_BATCH_SIZE = 24
@@ -190,11 +190,11 @@ LLM_BATCH_SIZE = 24
 # Concurrent static repair configuration
 CONCURRENT_REPAIR_SIZE = 24
 
-# VexHelix API configuration
-VEXHELIX_API_URL = "http://127.0.0.1:8001"
-VEXHELIX_TIMEOUT = 180
-VEXHELIX_LOOP_BOUND = 5
-VEXHELIX_RETRIES = 3
+# vexsym API configuration
+vexsym_API_URL = "http://127.0.0.1:8001"
+vexsym_TIMEOUT = 180
+vexsym_LOOP_BOUND = 5
+vexsym_RETRIES = 3
 
 # Repair configuration
 MAX_REPAIR_ITERATIONS = 5
@@ -218,8 +218,8 @@ MAX_TYPE_CONSTRAINT_CHARS = 3000  # NEW: Limit for type constraints
 # =============================================================================
 
 @dataclass
-class VexHelixResult:
-    """Result from VexHelix verification."""
+class vexsymResult:
+    """Result from vexsym verification."""
     success: bool
     status: Optional[str]  # "equivalent", "different", "error", "timeout"
     equivalent: Optional[bool]
@@ -308,8 +308,8 @@ def get_type_constraints(data: Dict, binary_path: Optional[str] = None) -> Dict:
     - Local variable type inference
     - Available for ANY binary via angr
     
-    This information is CRITICAL because VexHelix cannot verify type correctness,
-    only semantic equivalence. If the LLM uses wrong types, VexHelix may still
+    This information is CRITICAL because vexsym cannot verify type correctness,
+    only semantic equivalence. If the LLM uses wrong types, vexsym may still
     report "equivalent" but the code is incorrect.
     
     Args:
@@ -558,40 +558,40 @@ def format_type_constraints_for_prompt(type_constraints: Dict, max_chars: int = 
 
 
 # =============================================================================
-# VEXHELIX API INTEGRATION
+# vexsym API INTEGRATION
 # =============================================================================
 
-def check_vexhelix_health() -> bool:
-    """Check if VexHelix API is available and healthy."""
+def check_vexsym_health() -> bool:
+    """Check if vexsym API is available and healthy."""
     try:
-        response = requests.get(f"{VEXHELIX_API_URL}/health", timeout=10)
+        response = requests.get(f"{vexsym_API_URL}/health", timeout=10)
         if response.status_code == 200:
             data = response.json()
-            print(f"[VexHelix] Health check: {data.get('status', 'unknown')}")
+            print(f"[vexsym] Health check: {data.get('status', 'unknown')}")
             return data.get('status') == 'healthy'
         return False
     except Exception as e:
-        print(f"[VexHelix] Health check failed: {e}")
+        print(f"[vexsym] Health check failed: {e}")
         return False
 
 
-def call_vexhelix_api(
+def call_vexsym_api(
     binary_path: Path, 
     decompiled_code: str, 
     function_name: str,
     language: str = "c",
     num_args: int = 3,
     loop_bound: int = 5
-) -> VexHelixResult:
+) -> vexsymResult:
     """
-    Call VexHelix API to verify semantic equivalence between binary and decompiled code.
+    Call vexsym API to verify semantic equivalence between binary and decompiled code.
     
     IMPROVED in v7: Retry logic with exponential backoff for transient failures.
     """
     lang_str = "cpp" if language.lower() == "cpp" else "c"
     last_error = None
     
-    for attempt in range(VEXHELIX_RETRIES):
+    for attempt in range(vexsym_RETRIES):
         try:
             with open(binary_path, 'rb') as binary_file:
                 files = {
@@ -602,15 +602,15 @@ def call_vexhelix_api(
                     'function_name': function_name,
                     'language': lang_str,
                     'num_args': str(num_args),
-                    'loop_bound': str(VEXHELIX_LOOP_BOUND),
-                    'timeout': str(VEXHELIX_TIMEOUT)
+                    'loop_bound': str(vexsym_LOOP_BOUND),
+                    'timeout': str(vexsym_TIMEOUT)
                 }
                 
                 response = requests.post(
-                    f"{VEXHELIX_API_URL}/verify",
+                    f"{vexsym_API_URL}/verify",
                     files=files,
                     data=data,
-                    timeout=VEXHELIX_TIMEOUT + 30
+                    timeout=vexsym_TIMEOUT + 30
                 )
             
             if response.status_code == 200:
@@ -619,16 +619,16 @@ def call_vexhelix_api(
                 equivalent = result.get('equivalent', None)
                 
                 if status == 'equivalent':
-                    print(f"[VexHelix] ✓✓✓ EQUIVALENT - Semantic match!")
+                    print(f"[vexsym] ✓✓✓ EQUIVALENT - Semantic match!")
                 elif status == 'different':
                     div_count = len(result.get('divergences', []))
-                    print(f"[VexHelix] ✗ DIFFERENT - Found {div_count} divergence(s)")
+                    print(f"[vexsym] ✗ DIFFERENT - Found {div_count} divergence(s)")
                 elif status == 'timeout':
-                    print(f"[VexHelix] ⏱ TIMEOUT - Execution exceeded time limit")
+                    print(f"[vexsym] ⏱ TIMEOUT - Execution exceeded time limit")
                 elif status == 'error':
-                    print(f"[VexHelix] ⚠ ERROR - {result.get('message', 'Unknown error')}")
+                    print(f"[vexsym] ⚠ ERROR - {result.get('message', 'Unknown error')}")
                 
-                return VexHelixResult(
+                return vexsymResult(
                     success=True,
                     status=status,
                     equivalent=equivalent,
@@ -640,29 +640,29 @@ def call_vexhelix_api(
             else:
                 last_error = f"HTTP {response.status_code}: {response.text[:500]}"
                 if response.status_code >= 500:
-                    print(f"[VexHelix] Server error (attempt {attempt + 1}/{VEXHELIX_RETRIES}), retrying...")
+                    print(f"[vexsym] Server error (attempt {attempt + 1}/{vexsym_RETRIES}), retrying...")
                     time.sleep(2 ** attempt)
                     continue
-                return VexHelixResult(
+                return vexsymResult(
                     success=False, status='error', equivalent=None, divergences=None,
                     statistics=None, error_message=last_error, compilation_error=None
                 )
         
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             last_error = str(e)[:200]
-            if attempt < VEXHELIX_RETRIES - 1:
-                print(f"[VexHelix] Connection error (attempt {attempt + 1}/{VEXHELIX_RETRIES}), retrying...")
+            if attempt < vexsym_RETRIES - 1:
+                print(f"[vexsym] Connection error (attempt {attempt + 1}/{vexsym_RETRIES}), retrying...")
                 time.sleep(2 ** attempt)
                 continue
         except Exception as e:
-            return VexHelixResult(
+            return vexsymResult(
                 success=False, status='error', equivalent=None, divergences=None,
                 statistics=None, error_message=str(e)[:200], compilation_error=None
             )
     
-    return VexHelixResult(
+    return vexsymResult(
         success=False, status='error', equivalent=None, divergences=None,
-        statistics=None, error_message=f"Failed after {VEXHELIX_RETRIES} retries: {last_error}",
+        statistics=None, error_message=f"Failed after {vexsym_RETRIES} retries: {last_error}",
         compilation_error=None
     )
 
@@ -891,7 +891,7 @@ def get_semantic_repair_prompt(
     original_ghidra: str,
     current_code: str,
     function_summary: str,
-    vexhelix_result: VexHelixResult,
+    vexsym_result: vexsymResult,
     type_constraints: Dict,
     language: str,
     code_history: List[Tuple[str, int]] = None,  # V7.1: Previous attempts to avoid repeating mistakes
@@ -904,7 +904,7 @@ def get_semantic_repair_prompt(
     - Includes history of previous failed attempts to avoid repeating mistakes
     - Improved Ghidra warning: "ALTHOUGH UNLIKELY, STILL PLAUSIBLE" framing
     - More comprehensive list of Ghidra failure modes
-    - TypeForge type constraints for type errors VexHelix cannot detect
+    - TypeForge type constraints for type errors vexsym cannot detect
     
     V7.2 ENHANCEMENT:
     - Includes LLM-as-judge signature analysis to identify Ghidra errors early
@@ -1074,11 +1074,11 @@ USE THESE TYPES! If your types don't match, that's likely your bug.
 """
     
     # Format divergences with clear explanation - show up to 5 counterexamples
-    if vexhelix_result.divergences:
+    if vexsym_result.divergences:
         prompt += "\n═══════════════════════════════════════════════════════════════════════════════\n"
         prompt += "COUNTEREXAMPLES (inputs where your code gives WRONG answer):\n"
         prompt += "═══════════════════════════════════════════════════════════════════════════════\n"
-        for i, div in enumerate(vexhelix_result.divergences[:5]):
+        for i, div in enumerate(vexsym_result.divergences[:5]):
             prompt += f"\nTest case {i+1}:\n"
             if div.get('inputs'):
                 prompt += "  Inputs: "
@@ -1339,7 +1339,7 @@ def gen_context_summary(callgraph: Dict[str, List[str]]) -> str:
 
 
 # =============================================================================
-# MAIN OPTIMIZATION LOOP WITH VEXHELIX + TYPEFORGE
+# MAIN OPTIMIZATION LOOP WITH vexsym + TYPEFORGE
 # =============================================================================
 
 def get_optimized_code_v7(
@@ -1360,19 +1360,19 @@ def get_optimized_code_v7(
     signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
 ) -> Tuple[bool, str, Dict]:
     """
-    Enhanced optimization with VexHelix semantic verification + TypeForge type constraints.
+    Enhanced optimization with vexsym semantic verification + TypeForge type constraints.
     
     V7 KEY IMPROVEMENT: Type constraints from TypeForge are included in ALL prompts.
     V7.2 IMPROVEMENT: LLM-as-judge signature analysis included to catch Ghidra errors early.
     
     This addresses a fundamental limitation:
-    - VexHelix can only verify semantic equivalence for explored paths
+    - vexsym can only verify semantic equivalence for explored paths
     - Type errors may not manifest in symbolic execution but cause runtime bugs
     - TypeForge provides ground truth types from binary analysis
     
     The repair loop:
     1. Attempts static repair until code compiles (with type hints)
-    2. Verifies semantic equivalence with VexHelix
+    2. Verifies semantic equivalence with vexsym
     3. Performs semantic repair if divergences found (with type hints)
     4. Early exit if divergence count stagnates
     
@@ -1384,8 +1384,8 @@ def get_optimized_code_v7(
     stats = {
         'static_repair_iterations': 0,
         'semantic_repair_iterations': 0,
-        'vexhelix_calls': 0,
-        'vexhelix_equivalent_achieved': False,
+        'vexsym_calls': 0,
+        'vexsym_equivalent_achieved': False,
         'final_result': None,
         'language': language,
         'divergence_history': [],
@@ -1481,11 +1481,11 @@ def get_optimized_code_v7(
             
             print(f"{prefix} [Static] ✓ Compiles")
             
-            # Phase 2: Semantic Verification (VexHelix)
-            print(f"{prefix} [Semantic] Calling VexHelix...")
-            stats['vexhelix_calls'] += 1
+            # Phase 2: Semantic Verification (vexsym)
+            print(f"{prefix} [Semantic] Calling vexsym...")
+            stats['vexsym_calls'] += 1
             
-            vexhelix_result = call_vexhelix_api(
+            vexsym_result = call_vexsym_api(
                 binary_path=original_binary_path,
                 decompiled_code=optimized_code,
                 function_name=function_name,
@@ -1494,14 +1494,14 @@ def get_optimized_code_v7(
                 loop_bound=5
             )
             
-            if not vexhelix_result.success and vexhelix_result.status == 'error':
-                if vexhelix_result.compilation_error:
-                    print(f"{prefix} [Semantic] VexHelix compile error, fixing...")
+            if not vexsym_result.success and vexsym_result.status == 'error':
+                if vexsym_result.compilation_error:
+                    print(f"{prefix} [Semantic] vexsym compile error, fixing...")
                     stats['static_repair_iterations'] += 1
                     
                     repair_prompt = get_static_repair_prompt(
                         c_code=optimized_code,
-                        compilation_errors=vexhelix_result.compilation_error,
+                        compilation_errors=vexsym_result.compilation_error,
                         function_summary=function_summary,
                         caller_and_callee_summary=caller_and_callee_summary,
                         function_sog=function_sog,
@@ -1514,37 +1514,37 @@ def get_optimized_code_v7(
                         if new_code.strip():
                             optimized_code = new_code
                     except Exception as e:
-                        print(f"{prefix} [Semantic] LLM error on VexHelix compile fix: {e}")
+                        print(f"{prefix} [Semantic] LLM error on vexsym compile fix: {e}")
                     continue
                 
-                print(f"{prefix} [Semantic] VexHelix API error: {vexhelix_result.error_message}")
-                stats['final_result'] = 'vexhelix_error'
+                print(f"{prefix} [Semantic] vexsym API error: {vexsym_result.error_message}")
+                stats['final_result'] = 'vexsym_error'
                 stats['divergence_history'].append(1000)  # Special value for error
                 # Return current optimized_code (even if it's the last compilable version)
                 return True, optimized_code if optimized_code.strip() else c_code, stats
             
-            if vexhelix_result.status == 'timeout':
-                print(f"{prefix} [Semantic] VexHelix timeout")
-                stats['final_result'] = 'vexhelix_timeout'
+            if vexsym_result.status == 'timeout':
+                print(f"{prefix} [Semantic] vexsym timeout")
+                stats['final_result'] = 'vexsym_timeout'
                 stats['divergence_history'].append(1000)  # Special value for timeout
                 return True, optimized_code, stats
             
-            if vexhelix_result.status == 'equivalent' or vexhelix_result.equivalent:
+            if vexsym_result.status == 'equivalent' or vexsym_result.equivalent:
                 print(f"{prefix} ✓✓✓ EQUIVALENT!")
-                stats['vexhelix_equivalent_achieved'] = True
+                stats['vexsym_equivalent_achieved'] = True
                 stats['final_result'] = 'equivalent'
                 return True, optimized_code, stats
             
-            # V7.3: Check for VexHelix compilation failure that wasn't caught above
+            # V7.3: Check for vexsym compilation failure that wasn't caught above
             # This happens when status is 'different' but there's a compilation_error
-            if vexhelix_result.compilation_error and not vexhelix_result.divergences:
-                print(f"{prefix} [Semantic] VexHelix compilation failed (uncaught), treating as 1000 divergences")
+            if vexsym_result.compilation_error and not vexsym_result.divergences:
+                print(f"{prefix} [Semantic] vexsym compilation failed (uncaught), treating as 1000 divergences")
                 stats['divergence_history'].append(1000)  # Special value for compile error
                 # Try to repair and continue
                 stats['static_repair_iterations'] += 1
                 repair_prompt = get_static_repair_prompt(
                     c_code=optimized_code,
-                    compilation_errors=vexhelix_result.compilation_error,
+                    compilation_errors=vexsym_result.compilation_error,
                     function_summary=function_summary,
                     caller_and_callee_summary=caller_and_callee_summary,
                     function_sog=function_sog,
@@ -1560,14 +1560,14 @@ def get_optimized_code_v7(
                     print(f"{prefix} [Semantic] LLM error on compile fix: {e}")
                 continue
             
-            # Code compiled and VexHelix ran - save as last known good
+            # Code compiled and vexsym ran - save as last known good
             last_compilable_code = optimized_code
             
             # Phase 3: Check for stagnation and track best code
-            current_divergences = len(vexhelix_result.divergences or [])
+            current_divergences = len(vexsym_result.divergences or [])
             
             # V7.3: If no divergences but not equivalent, something's wrong - treat as error
-            if current_divergences == 0 and vexhelix_result.status != 'equivalent':
+            if current_divergences == 0 and vexsym_result.status != 'equivalent':
                 print(f"{prefix} [Semantic] ⚠ 0 divergences but not equivalent - treating as 1000")
                 current_divergences = 1000
             
@@ -1610,7 +1610,7 @@ def get_optimized_code_v7(
                 original_ghidra=original_ghidra,
                 current_code=optimized_code,
                 function_summary=function_summary,
-                vexhelix_result=vexhelix_result,
+                vexsym_result=vexsym_result,
                 type_constraints=type_constraints,
                 language=language,
                 code_history=code_history,  # V7.1: previous attempts
@@ -1741,13 +1741,13 @@ def batch_optimize_functions_v7(enriched_programs: List[Dict]) -> List[Dict]:
     """
     Optimize multiple functions using STREAMING PARALLEL repair loops.
     
-    V7: Uses TypeForge type constraints in addition to VexHelix verification.
+    V7: Uses TypeForge type constraints in addition to vexsym verification.
     V7.3: Results saved in batches after all items complete (not per-item).
     """
     global active_count, completed_count, total_tasks
     
     print(f"\n{'='*70}")
-    print(f"[Batch Optimize V7] STREAMING PARALLEL with TypeForge + VexHelix")
+    print(f"[Batch Optimize V7] STREAMING PARALLEL with TypeForge + vexsym")
     print(f"[Batch Optimize V7] Programs: {len(enriched_programs)}")
     print(f"[Batch Optimize V7] Concurrent workers: {PARALLEL_REPAIR_WORKERS}")
     print(f"[Batch Optimize V7] Rate limit: {GLOBAL_RATE_LIMITER.max_rpm} requests/min")
@@ -1844,7 +1844,7 @@ def batch_optimize_functions_v7(enriched_programs: List[Dict]) -> List[Dict]:
                 sym = "✓" if status == 'equivalent' else "✗"
                 print(f"[{sym}] {task_id} ({lang}) [{has_types}]: {status} "
                       f"({stats.get('semantic_repair_iterations', 0)}it, "
-                      f"{stats.get('vexhelix_calls', 0)}vex, {duration:.1f}s) | "
+                      f"{stats.get('vexsym_calls', 0)}vex, {duration:.1f}s) | "
                       f"done: {completed_count}/{total_tasks}, active: {active_count}", flush=True)
             
             return {
@@ -1936,11 +1936,11 @@ def batch_optimize_functions_v7(enriched_programs: List[Dict]) -> List[Dict]:
 # =============================================================================
 # 
 # ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-# │  COMPILE    │──►│   GHIDRA    │──►│  SUMMARIES  │──►│  VEXHELIX   │
+# │  COMPILE    │──►│   GHIDRA    │──►│  SUMMARIES  │──►│  vexsym   │
 # │  width=20   │   │  width=12   │   │  width=12   │   │  width=12   │
 # └─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
 #       ↑                 ↑                 ↑                 ↑
-#   compile_q         ghidra_q          summary_q         vexhelix_q
+#   compile_q         ghidra_q          summary_q         vexsym_q
 #
 # Each stage pulls from its input queue, processes, pushes to next queue.
 # Stages run CONCURRENTLY - no waiting for all items to complete a stage!
@@ -2268,16 +2268,16 @@ def _pipeline_summary_stage_v7(
     return worker
 
 
-def _pipeline_vexhelix_stage_v7(
+def _pipeline_vexsym_stage_v7(
     input_q: Queue, 
     results: List,
     results_lock: threading.Lock,
     counters: Dict,
     total_tasks: int,
     incremental_save_dir: Path,  # V7: Directory for incremental saves
-    stage_id: str = "VEXHELIX"
+    stage_id: str = "vexsym"
 ):
-    """Pipeline Stage 4: VexHelix semantic repair loop (V7: with TypeForge constraints).
+    """Pipeline Stage 4: vexsym semantic repair loop (V7: with TypeForge constraints).
     
     V7 ENHANCEMENT: Saves each result incrementally to a separate file for crash recovery.
     """
@@ -2304,7 +2304,7 @@ def _pipeline_vexhelix_stage_v7(
                 
                 start_time = time.time()
                 
-                # V7: Run VexHelix optimization loop with TypeForge constraints
+                # V7: Run vexsym optimization loop with TypeForge constraints
                 for func_data in enriched_data['functions']:
                     # V7: Get optimization level from data
                     opt_level = enriched_data.get('opt', 'O0')
@@ -2356,7 +2356,7 @@ def _pipeline_vexhelix_stage_v7(
                     stats = enriched_data['functions'][0].get('optimization_stats', {}) if enriched_data['functions'] else {}
                     print(f"[{sym}] {task_id} ({lang}) [{type_str}]: {final_result} "
                           f"({stats.get('semantic_repair_iterations', 0)}it, "
-                          f"{stats.get('vexhelix_calls', 0)}vex, {duration:.1f}s) | "
+                          f"{stats.get('vexsym_calls', 0)}vex, {duration:.1f}s) | "
                           f"done: {counters['completed']}/{total_tasks}, active: {counters['active']}", flush=True)
                 
             except Exception as e:
@@ -2379,7 +2379,7 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     - Stage 1 (COMPILE):  width=20, fast
     - Stage 2 (GHIDRA):   width=12, memory-heavy  
     - Stage 3 (SUMMARY):  width=12, LLM I/O bound (rate limited)
-    - Stage 4 (VEXHELIX): width=12, verification (rate limited)
+    - Stage 4 (vexsym): width=12, verification (rate limited)
     
     V7 Enhancements:
     - TypeForge constraints loaded during enrichment
@@ -2396,14 +2396,14 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     incremental_save_dir.mkdir(parents=True, exist_ok=True)
     
     print(f"\n{'='*70}")
-    print(f"[PIPELINED V7] TRUE CPU-STYLE PIPELINE with TypeForge + VexHelix")
+    print(f"[PIPELINED V7] TRUE CPU-STYLE PIPELINE with TypeForge + vexsym")
     print(f"{'='*70}")
     print(f"  Total programs: {total}")
     print(f"  Stage widths:")
     print(f"    COMPILE:  {PIPELINE_COMPILE_WIDTH} workers")
     print(f"    GHIDRA:   {PIPELINE_GHIDRA_WIDTH} workers")
     print(f"    SUMMARY:  {PIPELINE_SUMMARY_WIDTH} workers (LLM)")
-    print(f"    VEXHELIX: {PIPELINE_VEXHELIX_WIDTH} workers (LLM)")
+    print(f"    vexsym: {PIPELINE_vexsym_WIDTH} workers (LLM)")
     print(f"  Rate Limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
     print(f"  Incremental saves: {incremental_save_dir}")
     print(f"{'='*70}\n")
@@ -2416,7 +2416,7 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     compile_q = Queue()    # Input to compile stage
     ghidra_q = Queue()     # compile → ghidra
     summary_q = Queue()    # ghidra → summary
-    vexhelix_q = Queue()   # summary → vexhelix
+    vexsym_q = Queue()   # summary → vexsym
     
     # Results storage (thread-safe)
     results = []
@@ -2446,17 +2446,17 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     
     # Stage 3: Summary workers (V8: Uses pre-computed Gemini signatures)
     for _ in range(PIPELINE_SUMMARY_WIDTH):
-        worker_fn = _pipeline_summary_stage_v8(summary_q, vexhelix_q, dropped_counter, counter_lock)
+        worker_fn = _pipeline_summary_stage_v8(summary_q, vexsym_q, dropped_counter, counter_lock)
         t = threading.Thread(target=worker_fn, daemon=True)
         t.start()
         all_threads.append(('summary', t))
     
-    # Stage 4: VexHelix workers (with incremental saves)
-    for _ in range(PIPELINE_VEXHELIX_WIDTH):
-        worker_fn = _pipeline_vexhelix_stage_v7(vexhelix_q, results, results_lock, counters, total, incremental_save_dir)
+    # Stage 4: vexsym workers (with incremental saves)
+    for _ in range(PIPELINE_vexsym_WIDTH):
+        worker_fn = _pipeline_vexsym_stage_v7(vexsym_q, results, results_lock, counters, total, incremental_save_dir)
         t = threading.Thread(target=worker_fn, daemon=True)
         t.start()
-        all_threads.append(('vexhelix', t))
+        all_threads.append(('vexsym', t))
     
     # Feed all items into the compile stage
     for item in batch_items:
@@ -2477,10 +2477,10 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     for _ in range(PIPELINE_SUMMARY_WIDTH):
         summary_q.put(PIPELINE_DONE)
     
-    # Wait for vexhelix stage to drain, then signal shutdown
-    vexhelix_q.join()
-    for _ in range(PIPELINE_VEXHELIX_WIDTH):
-        vexhelix_q.put(PIPELINE_DONE)
+    # Wait for vexsym stage to drain, then signal shutdown
+    vexsym_q.join()
+    for _ in range(PIPELINE_vexsym_WIDTH):
+        vexsym_q.put(PIPELINE_DONE)
     
     # Wait for all threads to finish
     for stage_name, t in all_threads:
@@ -2571,7 +2571,7 @@ def process_batch_sequential_v7(batch_items: List[Dict], temp_base_dir: Path) ->
     2. Ghidra analysis on successful compilations
     3. Enrich with TypeForge constraints
     4. Generate summaries
-    5. Run optimization with VexHelix
+    5. Run optimization with vexsym
     
     Returns:
         List of results (saved by caller after batch completes)
@@ -2579,7 +2579,7 @@ def process_batch_sequential_v7(batch_items: List[Dict], temp_base_dir: Path) ->
     total = len(batch_items)
     
     print(f"\n{'='*70}")
-    print(f"[BATCH V7.3] Sequential Batch Processing with TypeForge + VexHelix")
+    print(f"[BATCH V7.3] Sequential Batch Processing with TypeForge + vexsym")
     print(f"{'='*70}")
     print(f"  Total programs: {total}")
     print(f"  Rate Limit: {GLOBAL_RATE_LIMITER.max_rpm} LLM requests/min")
@@ -2719,7 +2719,7 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     print(f"  - C++ programs: {cpp_count}")
     print(f"LLM: vLLM @ {config['llm']['vllm_base_url']}")
     print(f"Model: {config['llm']['vllm_model_name']}")
-    print(f"VexHelix API: {VEXHELIX_API_URL}")
+    print(f"vexsym API: {vexsym_API_URL}")
     print(f"TypeForge path: {corpus_path / 'typeforge'}")
     print(f"Rate limit: {GLOBAL_RATE_LIMITER.max_rpm} RPM (effectively unlimited)")
     print(f"Output directory: {incremental_save_dir}")
@@ -2750,13 +2750,13 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     print(f"{'='*70}\n")
 
 
-def check_vexhelix_api() -> bool:
-    """Check if VexHelix API is reachable and healthy."""
+def check_vexsym_api() -> bool:
+    """Check if vexsym API is reachable and healthy."""
     try:
-        response = requests.get(f"{VEXHELIX_API_URL}/health", timeout=10)
+        response = requests.get(f"{vexsym_API_URL}/health", timeout=10)
         if response.status_code == 200:
             data = response.json()
-            print(f"✓ VexHelix API is healthy at {VEXHELIX_API_URL}")
+            print(f"✓ vexsym API is healthy at {vexsym_API_URL}")
             print(f"  Version: {data.get('version', 'unknown')}")
             compilers = data.get('compilers', {})
             if compilers:
@@ -2764,13 +2764,13 @@ def check_vexhelix_api() -> bool:
                 print(f"  G++: {'✓' if compilers.get('gpp_available') else '✗'}")
             return True
         else:
-            print(f"⚠ VexHelix API returned unexpected status: {response.status_code}")
+            print(f"⚠ vexsym API returned unexpected status: {response.status_code}")
             return False
     except requests.exceptions.ConnectionError:
-        print(f"✗ Cannot connect to VexHelix API at {VEXHELIX_API_URL}")
+        print(f"✗ Cannot connect to vexsym API at {vexsym_API_URL}")
         return False
     except Exception as e:
-        print(f"✗ Error checking VexHelix API: {e}")
+        print(f"✗ Error checking vexsym API: {e}")
         return False
 
 
@@ -2781,7 +2781,7 @@ def main():
     parser = argparse.ArgumentParser(description="MissionDecompile V7 - PIPELINED LOCAL MODEL VERSION")
     parser.add_argument("--start", type=int, default=0, help="Starting index (default: 0)")
     parser.add_argument("--limit", type=int, default=None, help="Maximum items to process")
-    parser.add_argument("--skip-api-check", action="store_true", help="Skip VexHelix API check")
+    parser.add_argument("--skip-api-check", action="store_true", help="Skip vexsym API check")
     args = parser.parse_args()
     
     # Note: Rate limit already set to 100000 (effectively unlimited) at module load
@@ -2801,12 +2801,12 @@ def main():
         print(f"⚠ vLLM endpoint check failed: {e}")
         print("  Continuing anyway (may fail if vLLM is not running)")
     
-    # Check VexHelix API
+    # Check vexsym API
     if not args.skip_api_check:
-        if not check_vexhelix_api():
-            print("\n⚠ VexHelix API is not available.")
-            print("  Please start VexHelix server with:")
-            print("    cd /path/to/vexhelix && python -m vexhelix.api.server")
+        if not check_vexsym_api():
+            print("\n⚠ vexsym API is not available.")
+            print("  Please start vexsym server with:")
+            print("    cd /path/to/vexsym && python -m vexsym.api.server")
             print("  Or use --skip-api-check to continue anyway")
             return
     
