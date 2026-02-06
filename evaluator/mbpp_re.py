@@ -21,8 +21,8 @@ print(f"Loading config from: {CONFIG_PATH}")
 with open(CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
-corpus_path = Path(config["humaneval"]["corpus_path"])
-output_path = Path(config["humaneval"]["output_path"])
+corpus_path = Path(config["mbpp"]["corpus_path"])
+output_path = Path(config["mbpp"]["output_path"])
 
 llm_interface = create_llm_interface(
   provider=config["llm"]["vllm_provider"],
@@ -110,6 +110,8 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
         c_stats[opt]["total"] += 1
       else:
         cpp_stats[opt]["total"] += 1
+    else:
+      continue
       
     for line in optimized_code.splitlines():
       if "include" in line:
@@ -245,9 +247,9 @@ def main():
   Main function to process all JSON files in the corpus root directory.
   """
   
-  corpus_file = corpus_path / "humaneval-decompile.json"
-  #output_file = output_path / "batched_enriched_humaneval_decompile_v7.json"
-  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/VERITAS/output/humaneval-decompile/run_20260202_035200/combined_results.json"
+  corpus_file = corpus_path / "mbpp-decompile.json"
+  #output_file = output_path / "batched_enriched_mbpp_decompile_v7.json"
+  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/VERITAS/output/mbpp/v8_120b_batched_results.json"
   stats = process_json_file(corpus_file, output_file)
         
 

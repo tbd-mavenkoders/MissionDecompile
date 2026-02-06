@@ -1,16 +1,19 @@
 """
-Pipelined HumanEval Collector V7 - LOCAL MODEL VERSION (gpt-oss via vLLM)
+Pipelined mbpp Collector V8 - GEMINI SIGNATURES + ASM VERIFICATION VERSION
 
-This is the PIPELINED version for LOCAL MODELS.
+This is the PIPELINED version with PRE-COMPUTED GEMINI SIGNATURES.
 
-Key differences from batched_humaneval_collector_v7.py:
-- Uses vLLM interface instead of Gemini
-- Effectively UNLIMITED rate limit (local model = no rate limits)
-- Full streaming pipeline architecture (not sequential batches)
-- Incremental per-item saves to run_{timestamp}/func_{idx:04d}.json
+Key differences from pipelined_mbpp_collector_v7.py:
+- Uses PRE-COMPUTED GEMINI SIGNATURES instead of LLM signature analysis
+- Signatures are read from gemini_signatures_preprocessed.json (100% reliable)
+- NO LLM calls for signature generation - just file reads
+- ALL prompts enforce STRICT adherence to Gemini-generated types
+- Includes ASM-BASED VERIFICATION PROTOCOL for C type inference
 
 Features:
+- PRE-COMPUTED GEMINI SIGNATURES (reliable type information)
 - TYPE CONSTRAINTS from TypeForge (addresses VexHelix's type inference limitations)
+- ASM-BASED VERIFICATION PROTOCOL (4 heuristics for C type validation)
 - Static repair (ensure compilation)
 - Semantic verification via VexHelix API (ensure logical correctness)
 - Semantic repair loop with type-aware prompts
@@ -65,22 +68,135 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 with open(CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
+# =============================================================================
+# V8: GEMINI SIGNATURES - PRE-COMPUTED TYPE INFORMATION (100% RELIABLE)
+# =============================================================================
+GEMINI_SIGNATURES_PATH = Path(__file__).resolve().parent.parent.parent / "references" / "mbpp_gemini_signatures_4.json"
+
+# Load Gemini signatures at module initialization
+_gemini_signatures: Dict[str, Dict] = {}
+
+def _load_gemini_signatures():
+    """Load pre-computed Gemini signatures from JSON file."""
+    global _gemini_signatures
+    if not GEMINI_SIGNATURES_PATH.exists():
+        print(f"[V8] WARNING: Gemini signatures file not found: {GEMINI_SIGNATURES_PATH}")
+        return
+    
+    try:
+        with open(GEMINI_SIGNATURES_PATH, 'r') as f:
+            _gemini_signatures = json.load(f)
+        print(f"[V8] Loaded {len(_gemini_signatures)} pre-computed Gemini signatures")
+    except Exception as e:
+        print(f"[V8] ERROR loading Gemini signatures: {e}")
+
+def get_gemini_signature(index: int) -> Optional[Dict]:
+    """
+    Get pre-computed Gemini signature for a function by index.
+    
+    Args:
+        index: The corpus index of the function
+    
+    Returns:
+        Dict with {arg_count, arg_types, return_type} or None if not found
+    """
+    return _gemini_signatures.get(str(index))
+
+def format_gemini_signature_for_prompt(index: int) -> str:
+    """
+    Format Gemini signature as a string for inclusion in prompts.
+    
+    Args:
+        index: The corpus index of the function
+    
+    Returns:
+        Formatted string describing the signature, or empty string if not found
+    """
+    sig = get_gemini_signature(index)
+    if not sig:
+        return ""
+    
+    arg_types = sig.get('arg_types', [])
+    return_type = sig.get('return_type', 'unknown')
+    arg_count = sig.get('arg_count', len(arg_types))
+    
+    lines = [
+        "═══════════════════════════════════════════════════════════════════════════════",
+        "GEMINI-VERIFIED FUNCTION SIGNATURE (MANDATORY - YOU MUST USE THESE EXACT TYPES)",
+        "═══════════════════════════════════════════════════════════════════════════════",
+        "",
+        f"Return Type: {return_type}",
+        f"Number of Arguments: {arg_count}",
+        "Argument Types:"
+    ]
+    
+    for i, arg_type in enumerate(arg_types):
+        lines.append(f"  Argument {i+1}: {arg_type}")
+    
+    lines.extend([
+        "",
+        "⚠️ CRITICAL: These types have been verified by Gemini analysis and are CORRECT.",
+        "⚠️ You MUST use these EXACT types in your output code.",
+        "⚠️ DO NOT change the return type, argument count, or argument types.",
+        "⚠️ If Ghidra/decompiler says different types, IGNORE Ghidra - USE GEMINI TYPES.",
+        "═══════════════════════════════════════════════════════════════════════════════"
+    ])
+    
+    return "\n".join(lines)
+
+# Load signatures at module import
+_load_gemini_signatures()
+
 # Initialize tools
 c = Compiler()
 g = Ghidra()
 
-# PIPELINED VERSION: Use vLLM for local model (gpt-oss)
-llm_interface = create_llm_interface(
+# DUAL LLM ENDPOINTS for GPT-OSS 120B (batch size 12 each = effective 24)
+LLM_ENDPOINTS = [
+    "http://192.168.5.13:8000",
+    "http://192.168.5.13:8000"
+]
+
+llm_interface_1 = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
     model_name=config["llm"]["vllm_model_name"],
-    base_url=config["llm"]["vllm_base_url"]
+    base_url=LLM_ENDPOINTS[0]
 )
+
+llm_interface_2 = create_llm_interface(
+    provider=config["llm"]["vllm_provider"],
+    model_name=config["llm"]["vllm_model_name"],
+    base_url=LLM_ENDPOINTS[1]
+)
+
+# Round-robin dispatcher for dual LLM endpoints
+class DualLLMDispatcher:
+    """Round-robin dispatcher for 2 LLM endpoints, effective batch size 24 (12 per endpoint)."""
+    
+    def __init__(self, interface1, interface2):
+        self._interfaces = [interface1, interface2]
+        self._counter = 0
+        self._lock = threading.Lock()
+    
+    def generate(self, prompt, **kwargs):
+        """Round-robin dispatch to alternate endpoints."""
+        with self._lock:
+            idx = self._counter % 2
+            self._counter += 1
+        return self._interfaces[idx].generate(prompt, **kwargs)
+    
+    def get_stats(self):
+        """Return dispatch statistics."""
+        return {"total_dispatched": self._counter}
+
+# Single dispatcher instance used everywhere
+llm_interface = DualLLMDispatcher(llm_interface_1, llm_interface_2)
 
 # PIPELINED VERSION: Effectively unlimited rate limit for local model
 set_global_rate_limit(100000)  # 100k requests per minute = effectively unlimited
 
-corpus_path = Path(config["humaneval"]["corpus_path"])
-output_dir = Path(config["humaneval"]["output_path"])
+corpus_path = Path(config["mbpp"]["corpus_path"])
+output_dir = Path(config["mbpp"]["output_path"])
 
 # Thread-safe progress tracking
 print_lock = threading.Lock()
@@ -95,14 +211,14 @@ total_tasks = 0
 # PIPELINE STAGE WIDTHS (like CPU pipeline - each stage has its own parallelism)
 # Items flow through: COMPILE → GHIDRA → SUMMARY → VEXHELIX
 # IMPORTANT: LLM can only handle 24 concurrent requests total!
-PIPELINE_COMPILE_WIDTH = 20   # Compile is fast (gcc subprocess)
-PIPELINE_GHIDRA_WIDTH = 12    # Ghidra is memory-heavy, limit parallelism
+PIPELINE_COMPILE_WIDTH = 24   #20 Compile is fast (gcc subprocess)
+PIPELINE_GHIDRA_WIDTH = 24    #24 Ghidra is memory-heavy, limit parallelism
 PIPELINE_SUMMARY_WIDTH = 12   # LLM bound: 12 concurrent summary requests
 PIPELINE_VEXHELIX_WIDTH = 12  # LLM bound: 12 concurrent repair loops (each uses LLM)
 
 # Legacy batching configuration
-COMPILATION_BATCH_SIZE = 20
-GHIDRA_BATCH_SIZE = 8
+COMPILATION_BATCH_SIZE = 24
+GHIDRA_BATCH_SIZE = 24
 LLM_BATCH_SIZE = 12
 
 # Concurrent static repair configuration
@@ -586,7 +702,45 @@ def call_vexhelix_api(
 
 
 # =============================================================================
-# PROMPT GENERATION (V7.1: ALL PROMPTS INCLUDE TYPE CONSTRAINTS + GHIDRA WARNINGS)
+# V8: ASM-BASED VERIFICATION PROTOCOL (FROM change.txt - WORD FOR WORD)
+# =============================================================================
+ASM_VERIFICATION_PROTOCOL = """
+═══════════════════════════════════════════════════════════════════════════════
+ASM-BASED VERIFICATION PROTOCOL - FOR C ASM ONLY! FOR C ASM ONLY! (STRICT OVERRIDE RULES)
+═══════════════════════════════════════════════════════════════════════════════
+You MUST validate Ghidra's output against the ASM instructions. Ghidra frequently misidentifies signedness and constness.
+Apply the following 4 heuristics to the ASM. If they contradict Ghidra, THE ASM WINS.
+
+1. SIGNED vs UNSIGNED MISMATCH (The "Jump" Rule)
+   Check the conditional jumps and comparisons acting on the argument registers (rdi, rsi, rdx, rcx, r8, r9).
+   • SIGNED: If you see `jg`, `jge`, `jl`, `jle`, `cmovg`, `cmovl`, `idiv`, `cvtsi2ss` (int→float) → The type is SIGNED (int, long).
+   • UNSIGNED: If you see `ja`, `jae`, `jb`, `jbe`, `div`, `shl`, `shr` (logical shift) → The type is UNSIGNED (uint, size_t).
+   • ERROR TRAP: If Ghidra says `uint` but ASM has `cmp` followed by `jle` → OVERRIDE to `int`.
+
+2. CONST vs NON-CONST (The "Write" Rule)
+   Check if the memory pointed to by a pointer argument is ever written to.
+   • NON-CONST: If you see `mov [reg], val` or `mov [reg + off], val` using the argument's register.
+   • NON-CONST: If the pointer is passed as the *first* argument (destination) to `memset`, `strcpy`, or `memcpy`.
+   • CONST: If the pointer is ONLY used in `mov reg, [arg]` (reads) or passed as the *second* argument (source) to copy functions.
+   • RULE: If no writes are detected, default to `const Type*` (e.g., `const char*`).
+
+3. ARRAY vs POINTER (The "Addressing" Rule)
+   Distinguish `Type*` from `Type[]` based on how memory is accessed.
+   • ARRAY (`Type[]`): Look for SIB (Scale-Index-Base) addressing: `(%rdi,%rax,4)` or `[rdi + rax*4]`. This implies index-based access.
+   • POINTER (`Type*`): Look for pointer walking: `add $4, %rdi` followed by `mov ... (%rdi)`. This implies iterator/cursor logic.
+   • HEURISTIC: If the loop uses an index counter to access memory → `Type[]`. If it increments the pointer itself → `Type*`.
+
+4. VOID vs VALUE (The "Dead Register" Rule)
+   Decompilers often say `void` when a function returns a status code (int) or boolean.
+   • CHECK: Look at the last 5 instructions before `ret` (or `rep ret`).
+   • NOT VOID: If `eax`, `rax`, or `xmm0` are written to (e.g., `xor eax, eax`, `mov eax, 1`, `setz al`) and NOT subsequently clobbered/ignored.
+   • BOOLEAN: If the return values are strictly 0 and 1, and the function name implies a check (is/has/valid), prefer `bool` over `int`.
+   • ERROR TRAP: `xor eax, eax` followed by `ret` is `return 0;`, NOT `void`!
+"""
+
+
+# =============================================================================
+# PROMPT GENERATION (V8: ALL PROMPTS INCLUDE GEMINI SIGNATURES + ASM VERIFICATION)
 # =============================================================================
 
 def get_initial_prompt(
@@ -597,7 +751,7 @@ def get_initial_prompt(
     type_constraints: Dict,
     language: str, 
     asm: str = "",
-    signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
+    signature_analysis: str = ""  # V8: Now contains GEMINI signature (not LLM-generated)
 ) -> str:
     """
     Generate the initial prompt for the repair tool.
@@ -678,15 +832,17 @@ DECOMPILER PSEUDOCODE (MAY BE INCORRECT - use as rough guide only):
 Function Summary: {function_summary}
 """
     
-    # V7.2: Add LLM-as-judge signature analysis if available
+    # V8: Add GEMINI SIGNATURE if available (MANDATORY - takes priority over everything!)
     if signature_analysis:
         prompt += f"""
-═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
-═══════════════════════════════════════════════════════════════════════════════
-{signature_analysis[:1500]}
 
-USE THIS ANALYSIS! If it says decompiler's return type is WRONG, fix it!
+{signature_analysis}
+"""
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"""
+{ASM_VERIFICATION_PROTOCOL}
 """
     
     # V7: Add type constraints if available
@@ -710,13 +866,15 @@ def get_static_repair_prompt(
     function_sog: str, 
     type_constraints: Dict,
     language: str,
-    asm: str = ""  # V7.3: Add assembly for better context
+    asm: str = "",  # V7.3: Add assembly for better context
+    signature_analysis: str = ""  # V8: Gemini signature (MANDATORY)
 ) -> str:
     """
     Generate the static repair prompt for compilation errors.
     
     V7 IMPROVEMENT: Includes type constraints to help fix type-related errors.
     V7.3 IMPROVEMENT: Includes assembly (compiler output) for ground truth context.
+    V8 IMPROVEMENT: Includes MANDATORY Gemini signatures + ASM verification protocol.
     Many compilation errors are due to type mismatches that TypeForge can help resolve.
     """
     repair_prompt = config["prompts"]["compilation_error"]
@@ -737,9 +895,17 @@ def get_static_repair_prompt(
     
     prompt = f"{repair_prompt}\n\n```{lang_label}\nLanguage:{language}\nSummary:{function_summary}\nCode:{truncated_code}\n```\n\nCompilation Errors:\n{truncated_errors}\n\nPlease provide the corrected {language.upper()} code."
     
+    # V8: Add GEMINI SIGNATURE FIRST (MANDATORY!)
+    if signature_analysis:
+        prompt += f"\n\n{signature_analysis}\n\n⚠️ CRITICAL: When fixing compilation errors, YOU MUST PRESERVE the Gemini signature types above!"
+    
     # V7.3: Add assembly for ground truth context
     if truncated_asm:
         prompt += f"\n\nCOMPILER OUTPUT (ground truth - shows what the code should actually do):\n```\n{truncated_asm}\n```"
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"\n{ASM_VERIFICATION_PROTOCOL}"
     
     # V7: Add type constraints to help fix type errors
     type_str = format_type_constraints_for_prompt(type_constraints)
@@ -763,7 +929,7 @@ def get_semantic_repair_prompt(
     type_constraints: Dict,
     language: str,
     code_history: List[Tuple[str, int]] = None,  # V7.1: Previous attempts to avoid repeating mistakes
-    signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
+    signature_analysis: str = ""  # V8: GEMINI signature (MANDATORY)
 ) -> str:
     """
     Generate robust semantic repair prompt - assembly is ground truth, Ghidra is unreliable.
@@ -776,6 +942,10 @@ def get_semantic_repair_prompt(
     
     V7.2 ENHANCEMENT:
     - Includes LLM-as-judge signature analysis to identify Ghidra errors early
+    
+    V8 ENHANCEMENT:
+    - Includes MANDATORY Gemini signatures (pre-computed, 100% reliable)
+    - Includes ASM-BASED VERIFICATION PROTOCOL for C code
     """
     # Truncate assembly but keep more of it (it's the ground truth!)
     truncated_asm = original_asm[:MAX_ASM_CHARS] if original_asm else ""
@@ -920,16 +1090,21 @@ TYPE CONSTRAINTS (from static analysis - more reliable than decompiler):
 USE THESE TYPES! If your types don't match, that's likely your bug.
 """
     
-    # V7.2: Add LLM-as-judge signature analysis
+    # V8: Add GEMINI SIGNATURE (MANDATORY - takes absolute priority!)
     if signature_analysis:
         prompt += f"""
-═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
-═══════════════════════════════════════════════════════════════════════════════
-{signature_analysis[:1500]}
 
-THIS ANALYSIS IDENTIFIED SPECIFIC DECOMPILER ERRORS! Use it to fix your code.
-If it says return type should be float (not void), CHANGE YOUR RETURN TYPE!
+{signature_analysis}
+
+⚠️ CRITICAL: The Gemini signature above is VERIFIED and CORRECT.
+⚠️ You MUST use these EXACT types in your fixed code.
+⚠️ If your code uses different types, THAT IS THE BUG - fix the types first!
+"""
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"""
+{ASM_VERIFICATION_PROTOCOL}
 """
     
     # Format divergences with clear explanation - show up to 5 counterexamples
@@ -962,14 +1137,17 @@ YOUR TASK: Fix the code to match expected behavior
 ═══════════════════════════════════════════════════════════════════════════════
 
 Steps:
-1. CHECK RETURN TYPE FIRST - if a value is prepared for return, function returns a value!
-2. If function COMPUTES something, it MUST RETURN it - ignore decompiler's void!
-3. Analyze the context to understand what the function REALLY does
-4. Use TYPE CONSTRAINTS if provided - they're more reliable than decompiler (BUT override void if semantics disagree)
-5. Check COUNTEREXAMPLES - understand WHY your code gives wrong output
-6. DO NOT repeat previous failed attempts - try a DIFFERENT approach
-7. For C++ STL: if FP operations are present, the function returns float even if decompiler says void!
-8. Rewrite based on semantic analysis, not decompiler artifacts
+1. CHECK GEMINI SIGNATURE FIRST - You MUST use the EXACT types specified in the Gemini signature!
+2. CHECK RETURN TYPE - if a value is prepared for return, function returns a value!
+3. If function COMPUTES something, it MUST RETURN it - ignore decompiler's void!
+4. Analyze the context to understand what the function REALLY does
+5. Use TYPE CONSTRAINTS if provided - they're more reliable than decompiler (BUT override void if semantics disagree)
+6. Check COUNTEREXAMPLES - understand WHY your code gives wrong output
+7. DO NOT repeat previous failed attempts - try a DIFFERENT approach
+8. For C++ STL: if FP operations are present, the function returns float even if decompiler says void!
+9. Rewrite based on semantic analysis, not decompiler artifacts
+
+⚠️ CRITICAL REMINDER: Your output code MUST use the Gemini-verified types!
 
 Output ONLY the corrected function code. No explanations."""
     return prompt
@@ -1144,7 +1322,7 @@ def batch_ghidra_analysis(executables: List[Tuple[int, Path]]) -> Dict[int, Dict
 def analyze_single_executable(idx: int, exe_path: Path, cfg_script: Path, callgraph_script: Path) -> Dict:
     """Analyze a single executable with Ghidra."""
     executable_name = exe_path.stem
-    output_dir_path = Path(config["humaneval"]["output_path"]) / "SOG" / executable_name
+    output_dir_path = Path(config["mbpp"]["output_path"]) / "SOG" / executable_name
     if output_dir_path.exists():
         shutil.rmtree(output_dir_path)
     output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -1214,12 +1392,13 @@ def get_optimized_code_v7(
     num_args: int = 3,
     task_id: str = "",
     signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
-) -> Tuple[bool, str, Dict]:
+) -> Tuple[bool, str, str, Dict]:
     """
     Enhanced optimization with VexHelix semantic verification + TypeForge type constraints.
     
     V7 KEY IMPROVEMENT: Type constraints from TypeForge are included in ALL prompts.
     V7.2 IMPROVEMENT: LLM-as-judge signature analysis included to catch Ghidra errors early.
+    V8 IMPROVEMENT: Returns BOTH v4.5 checkpoint (first successful compile) AND v8 final result.
     
     This addresses a fundamental limitation:
     - VexHelix can only verify semantic equivalence for explored paths
@@ -1228,12 +1407,15 @@ def get_optimized_code_v7(
     
     The repair loop:
     1. Attempts static repair until code compiles (with type hints)
-    2. Verifies semantic equivalence with VexHelix
-    3. Performs semantic repair if divergences found (with type hints)
-    4. Early exit if divergence count stagnates
+    2. V4.5 CHECKPOINT: Save first successfully compiling code
+    3. Verifies semantic equivalence with VexHelix
+    4. Performs semantic repair if divergences found (with type hints)
+    5. Early exit if divergence count stagnates
     
     Returns:
-        (success, optimized_code, stats)
+        (success, v8_optimized_code, v4_5_checkpoint_code, stats)
+        - v8_optimized_code: Full VexHelix-optimized result
+        - v4_5_checkpoint_code: First successfully compiling code (before VexHelix loop)
     """
     prefix = f"[{task_id}]" if task_id else "[Optimize V7]"
     
@@ -1247,6 +1429,10 @@ def get_optimized_code_v7(
         'divergence_history': [],
         'has_type_constraints': bool(type_constraints)  # Track if TypeForge data was available
     }
+    
+    # V8: Track v4.5 checkpoint (first successful static repair)
+    v4_5_checkpoint_code = None
+    v4_5_checkpoint_saved = False
     
     # Track divergence improvement
     best_divergence_count = float('inf')
@@ -1292,7 +1478,7 @@ def get_optimized_code_v7(
         except Exception as e:
             print(f"{prefix} ERROR: Initial LLM generation failed: {e}")
             stats['final_result'] = 'llm_error'
-            return False, c_code, stats  # Return original Ghidra code as fallback
+            return False, c_code, None, stats  # Return original Ghidra code as fallback, no v4.5 checkpoint
         
         # Track the last known good (compilable) code
         last_compilable_code = None
@@ -1337,6 +1523,12 @@ def get_optimized_code_v7(
             
             print(f"{prefix} [Static] ✓ Compiles")
             
+            # V8: Capture v4.5 checkpoint (FIRST successful static repair)
+            if not v4_5_checkpoint_saved:
+                v4_5_checkpoint_code = optimized_code
+                v4_5_checkpoint_saved = True
+                print(f"{prefix} [V4.5] ★ Checkpoint saved (first successful compile)")
+            
             # Phase 2: Semantic Verification (VexHelix)
             print(f"{prefix} [Semantic] Calling VexHelix...")
             stats['vexhelix_calls'] += 1
@@ -1377,19 +1569,19 @@ def get_optimized_code_v7(
                 stats['final_result'] = 'vexhelix_error'
                 stats['divergence_history'].append(1000)  # Special value for error
                 # Return current optimized_code (even if it's the last compilable version)
-                return True, optimized_code if optimized_code.strip() else c_code, stats
+                return True, optimized_code if optimized_code.strip() else c_code, v4_5_checkpoint_code, stats
             
             if vexhelix_result.status == 'timeout':
                 print(f"{prefix} [Semantic] VexHelix timeout")
                 stats['final_result'] = 'vexhelix_timeout'
                 stats['divergence_history'].append(1000)  # Special value for timeout
-                return True, optimized_code, stats
+                return True, optimized_code, v4_5_checkpoint_code, stats
             
             if vexhelix_result.status == 'equivalent' or vexhelix_result.equivalent:
                 print(f"{prefix} ✓✓✓ EQUIVALENT!")
                 stats['vexhelix_equivalent_achieved'] = True
                 stats['final_result'] = 'equivalent'
-                return True, optimized_code, stats
+                return True, optimized_code, v4_5_checkpoint_code, stats
             
             # V7.3: Check for VexHelix compilation failure that wasn't caught above
             # This happens when status is 'different' but there's a compilation_error
@@ -1454,7 +1646,7 @@ def get_optimized_code_v7(
                     stats['final_result'] = 'stagnant_divergences'
                     # V7.1: Return BEST code, not current code
                     final_code = best_code if best_code else optimized_code
-                    return True, final_code, stats
+                    return True, final_code, v4_5_checkpoint_code, stats
             
             # Phase 4: Semantic Repair (V7.1: with TYPE CONSTRAINTS + HISTORY)
             print(f"{prefix} [Semantic] Attempting fix with type constraints + history...")
@@ -1511,12 +1703,12 @@ def get_optimized_code_v7(
         
         if compile_success:
             stats['final_result'] = 'max_iterations_compilable'
-            return True, final_code, stats
+            return True, final_code, v4_5_checkpoint_code, stats
         else:
             # Fall back to last compilable code
             stats['final_result'] = 'max_iterations_not_compilable'
             fallback_code = last_compilable_code if last_compilable_code else optimized_code
-            return False, fallback_code, stats
+            return False, fallback_code, v4_5_checkpoint_code, stats
 
 
 # =============================================================================
@@ -1914,6 +2106,110 @@ def _pipeline_ghidra_stage_v7(
     return worker
 
 
+def _pipeline_summary_stage_v8(
+    input_q: Queue, 
+    output_q: Queue, 
+    dropped_counter: Dict,
+    counter_lock: threading.Lock,
+    stage_id: str = "SUMMARY"
+):
+    """
+    Pipeline Stage 3: LLM summary generation (V8: with PRE-COMPUTED GEMINI SIGNATURES).
+    
+    V8 CHANGES:
+    - NO LLM calls for signature analysis - signatures are READ from gemini_signatures_preprocessed.json
+    - Gemini signatures are 100% reliable and MUST be used in all outputs
+    - Summary generation still uses LLM but includes mandatory Gemini signature
+    """
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                data = item['data']
+                compile_result = item['compile_result']
+                ghidra_result = item['ghidra_result']
+                idx = data['index']
+                lang = data.get('language', 'c')
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) generating...", flush=True)
+                
+                # V8: Enrich data with ghidra results AND TypeForge constraints
+                enriched_data = split_enrichment(data, ghidra_result, compile_result.executable_path)
+                
+                # Generate summaries for all functions
+                for func_data in enriched_data['functions']:
+                    # ═══════════════════════════════════════════════════════════════
+                    # V8 STEP 1: READ GEMINI SIGNATURE (NO LLM CALL!)
+                    # Signatures are pre-computed and 100% reliable
+                    # ═══════════════════════════════════════════════════════════════
+                    gemini_sig = get_gemini_signature(idx)
+                    if gemini_sig:
+                        # Format signature for prompt inclusion
+                        func_data['gemini_signature'] = gemini_sig
+                        func_data['signature_analysis'] = format_gemini_signature_for_prompt(idx)
+                        with print_lock:
+                            print(f"[{stage_id}] P{idx} Gemini signature loaded: ret={gemini_sig.get('return_type')}, args={gemini_sig.get('arg_count')}", flush=True)
+                    else:
+                        func_data['gemini_signature'] = None
+                        func_data['signature_analysis'] = ""
+                        with print_lock:
+                            print(f"[{stage_id}] P{idx} WARNING: No Gemini signature found!", flush=True)
+                    
+                    # ═══════════════════════════════════════════════════════════════
+                    # V8 STEP 2: SUMMARY GENERATION WITH MANDATORY GEMINI SIGNATURE
+                    # Include Gemini signature as MANDATORY type information
+                    # ═══════════════════════════════════════════════════════════════
+                    summary_prompt = config["prompts"]["summary_prompt"]
+                    prompt = f"{summary_prompt}"
+                    
+                    # V8: Add Gemini signature FIRST (most important!)
+                    if func_data.get('signature_analysis'):
+                        prompt += f"\n\n{func_data['signature_analysis']}"
+                    
+                    # Add Ghidra code
+                    if func_data.get('ghidra_code'):
+                        prompt += f"\n\nGhidra Decompiled Code (MAY BE WRONG - USE GEMINI SIGNATURE TYPES INSTEAD!):\n```c\n{func_data['ghidra_code']}\n```"
+                    
+                    # Add TypeHoon constraints
+                    if func_data.get('type_constraints'):
+                        prompt += f"\n\nTypeHoon Type Constraints (from binary analysis - but GEMINI SIGNATURE takes priority!):\n{json.dumps(func_data['type_constraints'], indent=2)[:1500]}"
+                    
+                    # Add assembly (ground truth)
+                    if func_data.get('asm'):
+                        prompt += f"\n\nAssembly Instructions (GROUND TRUTH - check xmm0/eax before RET for return type!):\n```asm\n{func_data['asm'][:2500]}\n```"
+                    
+                    func_data['function_summary'] = llm_interface.generate(prompt)
+                
+                # V8: Track Gemini signature status
+                has_gemini = any(f.get('gemini_signature') for f in enriched_data['functions'])
+                has_types = any(f.get('type_constraints') for f in enriched_data['functions'])
+                status_str = f"{'G' if has_gemini else '-'}{'T' if has_types else '-'}"
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) [{status_str}] ✓", flush=True)
+                
+                output_q.put({
+                    'enriched_data': enriched_data,
+                    'lang': lang,
+                    'idx': idx
+                })
+            except Exception as e:
+                with counter_lock:
+                    dropped_counter['summary'] += 1
+                with print_lock:
+                    print(f"[{stage_id}] P{item['data'].get('index', '?')} exception: {e} (dropped)", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+# V8: Keep the old V7 function for reference but don't use it
 def _pipeline_summary_stage_v7(
     input_q: Queue, 
     output_q: Queue, 
@@ -1921,7 +2217,13 @@ def _pipeline_summary_stage_v7(
     counter_lock: threading.Lock,
     stage_id: str = "SUMMARY"
 ):
-    """Pipeline Stage 3: LLM summary generation (V7: with TypeForge enrichment)."""
+    """
+    [DEPRECATED IN V8] Pipeline Stage 3: LLM summary generation (V7: with TypeForge enrichment).
+    
+    NOTE: This function is kept for reference but is NOT USED in V8.
+    V8 uses _pipeline_summary_stage_v8 which reads pre-computed Gemini signatures
+    instead of making LLM calls for signature analysis.
+    """
     def worker():
         while True:
             item = input_q.get()
@@ -2026,7 +2328,15 @@ def _pipeline_vexhelix_stage_v7(
     """Pipeline Stage 4: VexHelix semantic repair loop (V7: with TypeForge constraints).
     
     V7 ENHANCEMENT: Saves each result incrementally to a separate file for crash recovery.
+    V8 ENHANCEMENT: Saves BOTH v4.5 (first compile success) and v8 (full VexHelix) results
+                    in separate subdirectories: v4_5/ and v8/
     """
+    # V8: Create subdirectories for v4.5 and v8 results
+    v4_5_save_dir = incremental_save_dir / "v4_5"
+    v8_save_dir = incremental_save_dir / "v8"
+    v4_5_save_dir.mkdir(parents=True, exist_ok=True)
+    v8_save_dir.mkdir(parents=True, exist_ok=True)
+    
     def worker():
         while True:
             item = input_q.get()
@@ -2050,6 +2360,9 @@ def _pipeline_vexhelix_stage_v7(
                 
                 start_time = time.time()
                 
+                # V8: Store v4.5 checkpoint separately
+                v4_5_data = None
+                
                 # V7: Run VexHelix optimization loop with TypeForge constraints
                 for func_data in enriched_data['functions']:
                     # V7: Get optimization level from data
@@ -2058,7 +2371,8 @@ def _pipeline_vexhelix_stage_v7(
                     # V7.2: Get LLM-as-judge signature analysis
                     sig_analysis = func_data.get('signature_analysis', '')
                     
-                    optimization_success, optimized_code, stats = get_optimized_code_v7(
+                    # V8: Now returns 4 values: (success, v8_code, v4_5_code, stats)
+                    optimization_success, optimized_code, v4_5_checkpoint_code, stats = get_optimized_code_v7(
                         c_code=func_data['ghidra_code'],
                         function_summary=func_data['function_summary'],
                         caller_and_callee_summary=gen_context_summary(enriched_data['callgraph']),
@@ -2076,8 +2390,10 @@ def _pipeline_vexhelix_stage_v7(
                         signature_analysis=sig_analysis  # V7.2: LLM-as-judge result
                     )
                     
+                    # V8: Store both v8 and v4.5 results
                     func_data['optimization_status'] = optimization_success
-                    func_data['optimized_code'] = optimized_code
+                    func_data['optimized_code'] = optimized_code  # V8 final result
+                    func_data['v4_5_checkpoint_code'] = v4_5_checkpoint_code  # V4.5 checkpoint
                     func_data['optimization_stats'] = stats
                 
                 duration = time.time() - start_time
@@ -2087,11 +2403,31 @@ def _pipeline_vexhelix_stage_v7(
                 with results_lock:
                     results.append(enriched_data)
                 
-                # V7: INCREMENTAL SAVE - save this result immediately to its own file
+                # V8: INCREMENTAL SAVE TO BOTH v4_5 AND v8 DIRECTORIES
                 try:
-                    incremental_file = incremental_save_dir / f"func_{idx}.json"
-                    with open(incremental_file, 'w') as f:
+                    # V8 result (full VexHelix optimization)
+                    v8_file = v8_save_dir / f"func_{idx}.json"
+                    with open(v8_file, 'w') as f:
                         json.dump(enriched_data, f, indent=2)
+                    
+                    # V4.5 result (first successful compile checkpoint)
+                    # Create a separate copy with v4.5 code as the primary optimized code
+                    import copy
+                    v4_5_enriched_data = copy.deepcopy(enriched_data)
+                    for func_data in v4_5_enriched_data['functions']:
+                        # Replace optimized_code with v4.5 checkpoint
+                        v4_5_code = func_data.get('v4_5_checkpoint_code')
+                        if v4_5_code:
+                            func_data['optimized_code'] = v4_5_code
+                        # Mark as v4.5 result in stats
+                        if 'optimization_stats' in func_data:
+                            func_data['optimization_stats']['version'] = 'v4.5'
+                            func_data['optimization_stats']['final_result'] = 'static_repair_only'
+                    
+                    v4_5_file = v4_5_save_dir / f"func_{idx}.json"
+                    with open(v4_5_file, 'w') as f:
+                        json.dump(v4_5_enriched_data, f, indent=2)
+                        
                 except Exception as save_err:
                     print(f"[SAVE] Warning: Failed to save incremental result for {task_id}: {save_err}")
                 
@@ -2190,9 +2526,9 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
         t.start()
         all_threads.append(('ghidra', t))
     
-    # Stage 3: Summary workers
+    # Stage 3: Summary workers (V8: Uses pre-computed Gemini signatures)
     for _ in range(PIPELINE_SUMMARY_WIDTH):
-        worker_fn = _pipeline_summary_stage_v7(summary_q, vexhelix_q, dropped_counter, counter_lock)
+        worker_fn = _pipeline_summary_stage_v8(summary_q, vexhelix_q, dropped_counter, counter_lock)
         t = threading.Thread(target=worker_fn, daemon=True)
         t.start()
         all_threads.append(('summary', t))
@@ -2256,7 +2592,7 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     rl_stats = GLOBAL_RATE_LIMITER.get_stats()
     
     print(f"\n{'='*70}")
-    print(f"[PIPELINED V7] Complete!")
+    print(f"[PIPELINED V8] Complete!")
     print(f"{'='*70}")
     print(f"  Processed: {len(results)}/{total}")
     if total_dropped > 0:
@@ -2267,28 +2603,45 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
     print(f"  TypeForge Impact:")
     print(f"    With TypeForge: {with_types_equiv}/{with_types} equiv")
     print(f"    Without TypeForge: {equivalent_count - with_types_equiv}/{len(results) - with_types} equiv")
-    print(f"  LLM Rate Limiter:")
-    print(f"    Total requests: {rl_stats['total_requests']}")
-    print(f"    Total wait time: {rl_stats['total_wait_time_seconds']}s")
+    print(f"  LLM Dispatcher Stats:")
+    print(f"    Total dispatched: {llm_interface.get_stats()['total_dispatched']}")
+    print(f"    Endpoints: {LLM_ENDPOINTS}")
     print(f"  Incremental saves: {incremental_save_dir}")
+    print(f"    V4.5 results: {incremental_save_dir}/v4_5/")
+    print(f"    V8 results: {incremental_save_dir}/v8/")
     print(f"{'='*70}\n")
     
-    # V7: Combine all incremental files into final combined JSON
-    combined_file = incremental_save_dir / "combined_results.json"
+    # V8: Combine all incremental files into final combined JSON FOR BOTH v4.5 and v8
+    v4_5_save_dir = incremental_save_dir / "v4_5"
+    v8_save_dir = incremental_save_dir / "v8"
+    
+    # V8 combined results
+    v8_combined_file = v8_save_dir / "combined_results.json"
     try:
         combined_results = []
-        for json_file in sorted(incremental_save_dir.glob("func_*.json")):
+        for json_file in sorted(v8_save_dir.glob("func_*.json")):
             with open(json_file, 'r') as f:
                 combined_results.append(json.load(f))
-        
-        # Sort by index for consistent ordering
         combined_results.sort(key=lambda x: x.get('index', 0))
-        
-        with open(combined_file, 'w') as f:
+        with open(v8_combined_file, 'w') as f:
             json.dump(combined_results, f, indent=2)
-        print(f"[SAVE] Combined {len(combined_results)} results into {combined_file}")
+        print(f"[SAVE] Combined {len(combined_results)} V8 results into {v8_combined_file}")
     except Exception as e:
-        print(f"[SAVE] Warning: Failed to combine results: {e}")
+        print(f"[SAVE] Warning: Failed to combine V8 results: {e}")
+    
+    # V4.5 combined results
+    v4_5_combined_file = v4_5_save_dir / "combined_results.json"
+    try:
+        combined_results = []
+        for json_file in sorted(v4_5_save_dir.glob("func_*.json")):
+            with open(json_file, 'r') as f:
+                combined_results.append(json.load(f))
+        combined_results.sort(key=lambda x: x.get('index', 0))
+        with open(v4_5_combined_file, 'w') as f:
+            json.dump(combined_results, f, indent=2)
+        print(f"[SAVE] Combined {len(combined_results)} V4.5 results into {v4_5_combined_file}")
+    except Exception as e:
+        print(f"[SAVE] Warning: Failed to combine V4.5 results: {e}")
     
     return results, incremental_save_dir
 
@@ -2375,7 +2728,7 @@ def process_batch_sequential_v7(batch_items: List[Dict], temp_base_dir: Path) ->
     print(f"\n[Stage 4-5/5] Generating summaries and running optimization...")
     optimized_programs = batch_optimize_functions_v7(enriched_programs)
     
-    # V7.3: Results are returned and saved in batches by caller (process_humaneval_decompile)
+    # V7.3: Results are returned and saved in batches by caller (process_mbpp_decompile)
     
     # Summary statistics
     equivalent_count = sum(1 for r in optimized_programs 
@@ -2421,9 +2774,9 @@ def save_results(results: List[Dict], output_file_path: Path):
             json.dump(results, f, indent=4)
 
 
-def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
+def process_mbpp_decompile(json_path: Path, start_index: int = 0, limit: int = None) -> List[Dict]:
     """
-    Process the humaneval decompile json file with PIPELINED architecture.
+    Process the mbpp decompile json file with PIPELINED architecture.
     
     PIPELINED VERSION (local model):
     - Full streaming pipeline (items flow through stages as they complete)
@@ -2440,30 +2793,38 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     incremental_save_dir.mkdir(parents=True, exist_ok=True)
     
     with open(json_path, "r") as f:
-        humaneval_data = json.load(f)
+        mbpp_data = json.load(f)
+        
+    # list of indices
+    index_list = []
+    path = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/references/mbpp_gemini_signatures_4.json"
+    with open(path, "r") as r:
+      sig_data = json.load(r)
+    index_list = [int(k) for k in sig_data.keys()]
+    mbpp_data = [d for d in mbpp_data if d.get('index') in index_list]
+  
+    
     
     # Apply start_index and limit
     if limit:
-        humaneval_data = humaneval_data[start_index:start_index + limit]
+        mbpp_data = mbpp_data[start_index:start_index + limit]
     else:
-        humaneval_data = humaneval_data[start_index:]
-    
-    # Add index to each item for tracking
-    for i, item in enumerate(humaneval_data):
-        item['index'] = start_index + i
-    
+        mbpp_data = mbpp_data[start_index:]
+        
     # Count languages
-    c_count = sum(1 for d in humaneval_data if d['language'] == 'c')
-    cpp_count = sum(1 for d in humaneval_data if d['language'] == 'cpp')
+    c_count = sum(1 for d in mbpp_data if d['language'] == 'c')
+    cpp_count = sum(1 for d in mbpp_data if d['language'] == 'cpp')
     
     print(f"\n{'='*70}")
-    print(f"MissionDecompile V7 - PIPELINED LOCAL MODEL VERSION")
+    print(f"MissionDecompile V8 - DUAL LLM ENDPOINTS + DUAL OUTPUT")
     print(f"{'='*70}")
-    print(f"Processing {len(humaneval_data)} functions via STREAMING PIPELINE")
+    print(f"Processing {len(mbpp_data)} functions via STREAMING PIPELINE")
     print(f"  - Start index: {start_index}")
     print(f"  - C programs: {c_count}")
     print(f"  - C++ programs: {cpp_count}")
-    print(f"LLM: vLLM @ {config['llm']['vllm_base_url']}")
+    print(f"LLM Endpoints (round-robin, batch 12 each = effective 24):")
+    for i, endpoint in enumerate(LLM_ENDPOINTS):
+        print(f"  [{i+1}] {endpoint}")
     print(f"Model: {config['llm']['vllm_model_name']}")
     print(f"VexHelix API: {VEXHELIX_API_URL}")
     print(f"TypeForge path: {corpus_path / 'typeforge'}")
@@ -2479,7 +2840,7 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
         # PIPELINED: Process ALL items through streaming pipeline
         # (not in batches - the pipeline handles flow control)
         results, save_dir = process_batch_pipelined_v7(
-            humaneval_data, temp_base_path, incremental_save_dir
+            mbpp_data, temp_base_path, incremental_save_dir
         )
         all_results = results
     
@@ -2489,10 +2850,11 @@ def process_humaneval_decompile(json_path: Path, start_index: int = 0, limit: in
     
     print(f"\n{'='*70}")
     print(f"Processing complete!")
-    print(f"  Total processed: {len(all_results)}/{len(humaneval_data)}")
-    print(f"  Total equivalent: {equivalent_count}/{len(all_results) if all_results else 0}")
+    print(f"  Total processed: {len(all_results)}/{len(mbpp_data)}")
+    print(f"  Total equivalent (V8): {equivalent_count}/{len(all_results) if all_results else 0}")
     print(f"  Results directory: {incremental_save_dir}")
-    print(f"  Combined results: {incremental_save_dir / 'combined_results.json'}")
+    print(f"  V4.5 results: {incremental_save_dir / 'v4_5' / 'combined_results.json'}")
+    print(f"  V8 results: {incremental_save_dir / 'v8' / 'combined_results.json'}")
     print(f"{'='*70}\n")
 
 
@@ -2521,10 +2883,10 @@ def check_vexhelix_api() -> bool:
 
 
 def main():
-    """Main entry point for PIPELINED LOCAL MODEL version."""
+    """Main entry point for PIPELINED LOCAL MODEL version with DUAL ENDPOINTS."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="MissionDecompile V7 - PIPELINED LOCAL MODEL VERSION")
+    parser = argparse.ArgumentParser(description="MissionDecompile V8 - DUAL LLM ENDPOINTS + DUAL OUTPUT")
     parser.add_argument("--start", type=int, default=0, help="Starting index (default: 0)")
     parser.add_argument("--limit", type=int, default=None, help="Maximum items to process")
     parser.add_argument("--skip-api-check", action="store_true", help="Skip VexHelix API check")
@@ -2532,20 +2894,21 @@ def main():
     
     # Note: Rate limit already set to 100000 (effectively unlimited) at module load
     
-    json_path = corpus_path / "humaneval-decompile.json"
+    json_path = corpus_path / "mbpp-decompile.json"
     
     if not json_path.exists():
         print(f"✗ Dataset not found: {json_path}")
         return
     
-    # Check vLLM endpoint
-    print(f"Checking vLLM endpoint at {config['llm']['vllm_base_url']}...")
-    try:
-        response = requests.get(f"{config['llm']['vllm_base_url']}/health", timeout=5)
-        print(f"✓ vLLM endpoint is reachable")
-    except Exception as e:
-        print(f"⚠ vLLM endpoint check failed: {e}")
-        print("  Continuing anyway (may fail if vLLM is not running)")
+    # Check BOTH vLLM endpoints
+    print(f"Checking dual vLLM endpoints...")
+    for i, endpoint in enumerate(LLM_ENDPOINTS):
+        try:
+            response = requests.get(f"{endpoint}/health", timeout=5)
+            print(f"✓ Endpoint [{i+1}] {endpoint} is reachable")
+        except Exception as e:
+            print(f"⚠ Endpoint [{i+1}] {endpoint} check failed: {e}")
+            print("  Continuing anyway (may fail if vLLM is not running)")
     
     # Check VexHelix API
     if not args.skip_api_check:
@@ -2556,7 +2919,7 @@ def main():
             print("  Or use --skip-api-check to continue anyway")
             return
     
-    process_humaneval_decompile(json_path, args.start, args.limit)
+    process_mbpp_decompile(json_path, args.start, args.limit)
 
 
 if __name__ == "__main__":

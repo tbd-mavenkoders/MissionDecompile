@@ -56,7 +56,7 @@ def export_to_dot(func, program, out_path, monitor):
 
 monitor = getMonitor()
 funcs = currentProgram.getFunctionManager().getFunctions(True)
-outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Evaluation/gptoss/VERITAS/output/humaneval-decompile/SOG"
+outdir = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/VERITAS/output/humaneval-decompile/SOG"
 if not os.path.exists(outdir):
   os.makedirs(outdir)
 # create subfolder with name as executable name

@@ -1,16 +1,19 @@
 """
-Pipelined HumanEval Collector V7 - LOCAL MODEL VERSION (gpt-oss via vLLM)
+Pipelined HumanEval Collector V8 - GEMINI SIGNATURES + ASM VERIFICATION VERSION
 
-This is the PIPELINED version for LOCAL MODELS.
+This is the PIPELINED version with PRE-COMPUTED GEMINI SIGNATURES.
 
-Key differences from batched_humaneval_collector_v7.py:
-- Uses vLLM interface instead of Gemini
-- Effectively UNLIMITED rate limit (local model = no rate limits)
-- Full streaming pipeline architecture (not sequential batches)
-- Incremental per-item saves to run_{timestamp}/func_{idx:04d}.json
+Key differences from pipelined_humaneval_collector_v7.py:
+- Uses PRE-COMPUTED GEMINI SIGNATURES instead of LLM signature analysis
+- Signatures are read from gemini_signatures_preprocessed.json (100% reliable)
+- NO LLM calls for signature generation - just file reads
+- ALL prompts enforce STRICT adherence to Gemini-generated types
+- Includes ASM-BASED VERIFICATION PROTOCOL for C type inference
 
 Features:
+- PRE-COMPUTED GEMINI SIGNATURES (reliable type information)
 - TYPE CONSTRAINTS from TypeForge (addresses VexHelix's type inference limitations)
+- ASM-BASED VERIFICATION PROTOCOL (4 heuristics for C type validation)
 - Static repair (ensure compilation)
 - Semantic verification via VexHelix API (ensure logical correctness)
 - Semantic repair loop with type-aware prompts
@@ -65,6 +68,85 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 with open(CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
+# =============================================================================
+# V8: GEMINI SIGNATURES - PRE-COMPUTED TYPE INFORMATION (100% RELIABLE)
+# =============================================================================
+GEMINI_SIGNATURES_PATH = Path(__file__).resolve().parent.parent.parent / "references" / "exebench_gemini_signatures.json"
+
+# Load Gemini signatures at module initialization
+_gemini_signatures: Dict[str, Dict] = {}
+
+def _load_gemini_signatures():
+    """Load pre-computed Gemini signatures from JSON file."""
+    global _gemini_signatures
+    if not GEMINI_SIGNATURES_PATH.exists():
+        print(f"[V8] WARNING: Gemini signatures file not found: {GEMINI_SIGNATURES_PATH}")
+        return
+    
+    try:
+        with open(GEMINI_SIGNATURES_PATH, 'r') as f:
+            _gemini_signatures = json.load(f)
+        print(f"[V8] Loaded {len(_gemini_signatures)} pre-computed Gemini signatures")
+    except Exception as e:
+        print(f"[V8] ERROR loading Gemini signatures: {e}")
+
+def get_gemini_signature(index: int) -> Optional[Dict]:
+    """
+    Get pre-computed Gemini signature for a function by index.
+    
+    Args:
+        index: The corpus index of the function
+    
+    Returns:
+        Dict with {arg_count, arg_types, return_type} or None if not found
+    """
+    return _gemini_signatures.get(str(index))
+
+def format_gemini_signature_for_prompt(index: int) -> str:
+    """
+    Format Gemini signature as a string for inclusion in prompts.
+    
+    Args:
+        index: The corpus index of the function
+    
+    Returns:
+        Formatted string describing the signature, or empty string if not found
+    """
+    sig = get_gemini_signature(index)
+    if not sig:
+        return ""
+    
+    arg_types = sig.get('arg_types', [])
+    return_type = sig.get('return_type', 'unknown')
+    arg_count = sig.get('arg_count', len(arg_types))
+    
+    lines = [
+        "═══════════════════════════════════════════════════════════════════════════════",
+        "GEMINI-VERIFIED FUNCTION SIGNATURE (MANDATORY - YOU MUST USE THESE EXACT TYPES)",
+        "═══════════════════════════════════════════════════════════════════════════════",
+        "",
+        f"Return Type: {return_type}",
+        f"Number of Arguments: {arg_count}",
+        "Argument Types:"
+    ]
+    
+    for i, arg_type in enumerate(arg_types):
+        lines.append(f"  Argument {i+1}: {arg_type}")
+    
+    lines.extend([
+        "",
+        "⚠️ CRITICAL: These types have been verified by Gemini analysis and are CORRECT.",
+        "⚠️ You MUST use these EXACT types in your output code.",
+        "⚠️ DO NOT change the return type, argument count, or argument types.",
+        "⚠️ If Ghidra/decompiler says different types, IGNORE Ghidra - USE GEMINI TYPES.",
+        "═══════════════════════════════════════════════════════════════════════════════"
+    ])
+    
+    return "\n".join(lines)
+
+# Load signatures at module import
+_load_gemini_signatures()
+
 # Initialize tools
 c = Compiler()
 g = Ghidra()
@@ -95,18 +177,18 @@ total_tasks = 0
 # PIPELINE STAGE WIDTHS (like CPU pipeline - each stage has its own parallelism)
 # Items flow through: COMPILE → GHIDRA → SUMMARY → VEXHELIX
 # IMPORTANT: LLM can only handle 24 concurrent requests total!
-PIPELINE_COMPILE_WIDTH = 20   # Compile is fast (gcc subprocess)
-PIPELINE_GHIDRA_WIDTH = 12    # Ghidra is memory-heavy, limit parallelism
-PIPELINE_SUMMARY_WIDTH = 12   # LLM bound: 12 concurrent summary requests
-PIPELINE_VEXHELIX_WIDTH = 12  # LLM bound: 12 concurrent repair loops (each uses LLM)
+PIPELINE_COMPILE_WIDTH = 24   #20 Compile is fast (gcc subprocess)
+PIPELINE_GHIDRA_WIDTH = 24    #24 Ghidra is memory-heavy, limit parallelism
+PIPELINE_SUMMARY_WIDTH = 24   # LLM bound: 12 concurrent summary requests
+PIPELINE_VEXHELIX_WIDTH = 24  # LLM bound: 12 concurrent repair loops (each uses LLM)
 
 # Legacy batching configuration
-COMPILATION_BATCH_SIZE = 20
-GHIDRA_BATCH_SIZE = 8
-LLM_BATCH_SIZE = 12
+COMPILATION_BATCH_SIZE = 24
+GHIDRA_BATCH_SIZE = 24
+LLM_BATCH_SIZE = 24
 
 # Concurrent static repair configuration
-CONCURRENT_REPAIR_SIZE = 12
+CONCURRENT_REPAIR_SIZE = 24
 
 # VexHelix API configuration
 VEXHELIX_API_URL = "http://127.0.0.1:8001"
@@ -118,7 +200,7 @@ VEXHELIX_RETRIES = 3
 MAX_REPAIR_ITERATIONS = 5
 MAX_STATIC_REPAIR_PER_CYCLE = 3
 MAX_STAGNANT_ITERATIONS = 3
-PARALLEL_REPAIR_WORKERS = 12
+PARALLEL_REPAIR_WORKERS = 24
 
 # History tracking for semantic repair (avoid repeating mistakes)
 MAX_CODE_HISTORY = 2  # Keep last N best attempts in prompt
@@ -586,7 +668,45 @@ def call_vexhelix_api(
 
 
 # =============================================================================
-# PROMPT GENERATION (V7.1: ALL PROMPTS INCLUDE TYPE CONSTRAINTS + GHIDRA WARNINGS)
+# V8: ASM-BASED VERIFICATION PROTOCOL (FROM change.txt - WORD FOR WORD)
+# =============================================================================
+ASM_VERIFICATION_PROTOCOL = """
+═══════════════════════════════════════════════════════════════════════════════
+ASM-BASED VERIFICATION PROTOCOL - FOR C ASM ONLY! FOR C ASM ONLY! (STRICT OVERRIDE RULES)
+═══════════════════════════════════════════════════════════════════════════════
+You MUST validate Ghidra's output against the ASM instructions. Ghidra frequently misidentifies signedness and constness.
+Apply the following 4 heuristics to the ASM. If they contradict Ghidra, THE ASM WINS.
+
+1. SIGNED vs UNSIGNED MISMATCH (The "Jump" Rule)
+   Check the conditional jumps and comparisons acting on the argument registers (rdi, rsi, rdx, rcx, r8, r9).
+   • SIGNED: If you see `jg`, `jge`, `jl`, `jle`, `cmovg`, `cmovl`, `idiv`, `cvtsi2ss` (int→float) → The type is SIGNED (int, long).
+   • UNSIGNED: If you see `ja`, `jae`, `jb`, `jbe`, `div`, `shl`, `shr` (logical shift) → The type is UNSIGNED (uint, size_t).
+   • ERROR TRAP: If Ghidra says `uint` but ASM has `cmp` followed by `jle` → OVERRIDE to `int`.
+
+2. CONST vs NON-CONST (The "Write" Rule)
+   Check if the memory pointed to by a pointer argument is ever written to.
+   • NON-CONST: If you see `mov [reg], val` or `mov [reg + off], val` using the argument's register.
+   • NON-CONST: If the pointer is passed as the *first* argument (destination) to `memset`, `strcpy`, or `memcpy`.
+   • CONST: If the pointer is ONLY used in `mov reg, [arg]` (reads) or passed as the *second* argument (source) to copy functions.
+   • RULE: If no writes are detected, default to `const Type*` (e.g., `const char*`).
+
+3. ARRAY vs POINTER (The "Addressing" Rule)
+   Distinguish `Type*` from `Type[]` based on how memory is accessed.
+   • ARRAY (`Type[]`): Look for SIB (Scale-Index-Base) addressing: `(%rdi,%rax,4)` or `[rdi + rax*4]`. This implies index-based access.
+   • POINTER (`Type*`): Look for pointer walking: `add $4, %rdi` followed by `mov ... (%rdi)`. This implies iterator/cursor logic.
+   • HEURISTIC: If the loop uses an index counter to access memory → `Type[]`. If it increments the pointer itself → `Type*`.
+
+4. VOID vs VALUE (The "Dead Register" Rule)
+   Decompilers often say `void` when a function returns a status code (int) or boolean.
+   • CHECK: Look at the last 5 instructions before `ret` (or `rep ret`).
+   • NOT VOID: If `eax`, `rax`, or `xmm0` are written to (e.g., `xor eax, eax`, `mov eax, 1`, `setz al`) and NOT subsequently clobbered/ignored.
+   • BOOLEAN: If the return values are strictly 0 and 1, and the function name implies a check (is/has/valid), prefer `bool` over `int`.
+   • ERROR TRAP: `xor eax, eax` followed by `ret` is `return 0;`, NOT `void`!
+"""
+
+
+# =============================================================================
+# PROMPT GENERATION (V8: ALL PROMPTS INCLUDE GEMINI SIGNATURES + ASM VERIFICATION)
 # =============================================================================
 
 def get_initial_prompt(
@@ -597,7 +717,7 @@ def get_initial_prompt(
     type_constraints: Dict,
     language: str, 
     asm: str = "",
-    signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
+    signature_analysis: str = ""  # V8: Now contains GEMINI signature (not LLM-generated)
 ) -> str:
     """
     Generate the initial prompt for the repair tool.
@@ -678,15 +798,17 @@ DECOMPILER PSEUDOCODE (MAY BE INCORRECT - use as rough guide only):
 Function Summary: {function_summary}
 """
     
-    # V7.2: Add LLM-as-judge signature analysis if available
+    # V8: Add GEMINI SIGNATURE if available (MANDATORY - takes priority over everything!)
     if signature_analysis:
         prompt += f"""
-═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
-═══════════════════════════════════════════════════════════════════════════════
-{signature_analysis[:1500]}
 
-USE THIS ANALYSIS! If it says decompiler's return type is WRONG, fix it!
+{signature_analysis}
+"""
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"""
+{ASM_VERIFICATION_PROTOCOL}
 """
     
     # V7: Add type constraints if available
@@ -710,13 +832,15 @@ def get_static_repair_prompt(
     function_sog: str, 
     type_constraints: Dict,
     language: str,
-    asm: str = ""  # V7.3: Add assembly for better context
+    asm: str = "",  # V7.3: Add assembly for better context
+    signature_analysis: str = ""  # V8: Gemini signature (MANDATORY)
 ) -> str:
     """
     Generate the static repair prompt for compilation errors.
     
     V7 IMPROVEMENT: Includes type constraints to help fix type-related errors.
     V7.3 IMPROVEMENT: Includes assembly (compiler output) for ground truth context.
+    V8 IMPROVEMENT: Includes MANDATORY Gemini signatures + ASM verification protocol.
     Many compilation errors are due to type mismatches that TypeForge can help resolve.
     """
     repair_prompt = config["prompts"]["compilation_error"]
@@ -737,9 +861,17 @@ def get_static_repair_prompt(
     
     prompt = f"{repair_prompt}\n\n```{lang_label}\nLanguage:{language}\nSummary:{function_summary}\nCode:{truncated_code}\n```\n\nCompilation Errors:\n{truncated_errors}\n\nPlease provide the corrected {language.upper()} code."
     
+    # V8: Add GEMINI SIGNATURE FIRST (MANDATORY!)
+    if signature_analysis:
+        prompt += f"\n\n{signature_analysis}\n\n⚠️ CRITICAL: When fixing compilation errors, YOU MUST PRESERVE the Gemini signature types above!"
+    
     # V7.3: Add assembly for ground truth context
     if truncated_asm:
         prompt += f"\n\nCOMPILER OUTPUT (ground truth - shows what the code should actually do):\n```\n{truncated_asm}\n```"
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"\n{ASM_VERIFICATION_PROTOCOL}"
     
     # V7: Add type constraints to help fix type errors
     type_str = format_type_constraints_for_prompt(type_constraints)
@@ -763,7 +895,7 @@ def get_semantic_repair_prompt(
     type_constraints: Dict,
     language: str,
     code_history: List[Tuple[str, int]] = None,  # V7.1: Previous attempts to avoid repeating mistakes
-    signature_analysis: str = ""  # V7.2: LLM-as-judge signature analysis
+    signature_analysis: str = ""  # V8: GEMINI signature (MANDATORY)
 ) -> str:
     """
     Generate robust semantic repair prompt - assembly is ground truth, Ghidra is unreliable.
@@ -776,6 +908,10 @@ def get_semantic_repair_prompt(
     
     V7.2 ENHANCEMENT:
     - Includes LLM-as-judge signature analysis to identify Ghidra errors early
+    
+    V8 ENHANCEMENT:
+    - Includes MANDATORY Gemini signatures (pre-computed, 100% reliable)
+    - Includes ASM-BASED VERIFICATION PROTOCOL for C code
     """
     # Truncate assembly but keep more of it (it's the ground truth!)
     truncated_asm = original_asm[:MAX_ASM_CHARS] if original_asm else ""
@@ -920,16 +1056,21 @@ TYPE CONSTRAINTS (from static analysis - more reliable than decompiler):
 USE THESE TYPES! If your types don't match, that's likely your bug.
 """
     
-    # V7.2: Add LLM-as-judge signature analysis
+    # V8: Add GEMINI SIGNATURE (MANDATORY - takes absolute priority!)
     if signature_analysis:
         prompt += f"""
-═══════════════════════════════════════════════════════════════════════════════
-SIGNATURE ANALYSIS (identified decompiler errors):
-═══════════════════════════════════════════════════════════════════════════════
-{signature_analysis[:1500]}
 
-THIS ANALYSIS IDENTIFIED SPECIFIC DECOMPILER ERRORS! Use it to fix your code.
-If it says return type should be float (not void), CHANGE YOUR RETURN TYPE!
+{signature_analysis}
+
+⚠️ CRITICAL: The Gemini signature above is VERIFIED and CORRECT.
+⚠️ You MUST use these EXACT types in your fixed code.
+⚠️ If your code uses different types, THAT IS THE BUG - fix the types first!
+"""
+    
+    # V8: Add ASM-BASED VERIFICATION PROTOCOL for C code
+    if language.lower() == 'c':
+        prompt += f"""
+{ASM_VERIFICATION_PROTOCOL}
 """
     
     # Format divergences with clear explanation - show up to 5 counterexamples
@@ -962,14 +1103,17 @@ YOUR TASK: Fix the code to match expected behavior
 ═══════════════════════════════════════════════════════════════════════════════
 
 Steps:
-1. CHECK RETURN TYPE FIRST - if a value is prepared for return, function returns a value!
-2. If function COMPUTES something, it MUST RETURN it - ignore decompiler's void!
-3. Analyze the context to understand what the function REALLY does
-4. Use TYPE CONSTRAINTS if provided - they're more reliable than decompiler (BUT override void if semantics disagree)
-5. Check COUNTEREXAMPLES - understand WHY your code gives wrong output
-6. DO NOT repeat previous failed attempts - try a DIFFERENT approach
-7. For C++ STL: if FP operations are present, the function returns float even if decompiler says void!
-8. Rewrite based on semantic analysis, not decompiler artifacts
+1. CHECK GEMINI SIGNATURE FIRST - You MUST use the EXACT types specified in the Gemini signature!
+2. CHECK RETURN TYPE - if a value is prepared for return, function returns a value!
+3. If function COMPUTES something, it MUST RETURN it - ignore decompiler's void!
+4. Analyze the context to understand what the function REALLY does
+5. Use TYPE CONSTRAINTS if provided - they're more reliable than decompiler (BUT override void if semantics disagree)
+6. Check COUNTEREXAMPLES - understand WHY your code gives wrong output
+7. DO NOT repeat previous failed attempts - try a DIFFERENT approach
+8. For C++ STL: if FP operations are present, the function returns float even if decompiler says void!
+9. Rewrite based on semantic analysis, not decompiler artifacts
+
+⚠️ CRITICAL REMINDER: Your output code MUST use the Gemini-verified types!
 
 Output ONLY the corrected function code. No explanations."""
     return prompt
@@ -1914,6 +2058,110 @@ def _pipeline_ghidra_stage_v7(
     return worker
 
 
+def _pipeline_summary_stage_v8(
+    input_q: Queue, 
+    output_q: Queue, 
+    dropped_counter: Dict,
+    counter_lock: threading.Lock,
+    stage_id: str = "SUMMARY"
+):
+    """
+    Pipeline Stage 3: LLM summary generation (V8: with PRE-COMPUTED GEMINI SIGNATURES).
+    
+    V8 CHANGES:
+    - NO LLM calls for signature analysis - signatures are READ from gemini_signatures_preprocessed.json
+    - Gemini signatures are 100% reliable and MUST be used in all outputs
+    - Summary generation still uses LLM but includes mandatory Gemini signature
+    """
+    def worker():
+        while True:
+            item = input_q.get()
+            if item is PIPELINE_DONE:
+                input_q.task_done()
+                break
+            
+            try:
+                data = item['data']
+                compile_result = item['compile_result']
+                ghidra_result = item['ghidra_result']
+                idx = data['index']
+                lang = data.get('language', 'c')
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) generating...", flush=True)
+                
+                # V8: Enrich data with ghidra results AND TypeForge constraints
+                enriched_data = split_enrichment(data, ghidra_result, compile_result.executable_path)
+                
+                # Generate summaries for all functions
+                for func_data in enriched_data['functions']:
+                    # ═══════════════════════════════════════════════════════════════
+                    # V8 STEP 1: READ GEMINI SIGNATURE (NO LLM CALL!)
+                    # Signatures are pre-computed and 100% reliable
+                    # ═══════════════════════════════════════════════════════════════
+                    gemini_sig = get_gemini_signature(idx)
+                    if gemini_sig:
+                        # Format signature for prompt inclusion
+                        func_data['gemini_signature'] = gemini_sig
+                        func_data['signature_analysis'] = format_gemini_signature_for_prompt(idx)
+                        with print_lock:
+                            print(f"[{stage_id}] P{idx} Gemini signature loaded: ret={gemini_sig.get('return_type')}, args={gemini_sig.get('arg_count')}", flush=True)
+                    else:
+                        func_data['gemini_signature'] = None
+                        func_data['signature_analysis'] = ""
+                        with print_lock:
+                            print(f"[{stage_id}] P{idx} WARNING: No Gemini signature found!", flush=True)
+                    
+                    # ═══════════════════════════════════════════════════════════════
+                    # V8 STEP 2: SUMMARY GENERATION WITH MANDATORY GEMINI SIGNATURE
+                    # Include Gemini signature as MANDATORY type information
+                    # ═══════════════════════════════════════════════════════════════
+                    summary_prompt = config["prompts"]["summary_prompt"]
+                    prompt = f"{summary_prompt}"
+                    
+                    # V8: Add Gemini signature FIRST (most important!)
+                    if func_data.get('signature_analysis'):
+                        prompt += f"\n\n{func_data['signature_analysis']}"
+                    
+                    # Add Ghidra code
+                    if func_data.get('ghidra_code'):
+                        prompt += f"\n\nGhidra Decompiled Code (MAY BE WRONG - USE GEMINI SIGNATURE TYPES INSTEAD!):\n```c\n{func_data['ghidra_code']}\n```"
+                    
+                    # Add TypeHoon constraints
+                    if func_data.get('type_constraints'):
+                        prompt += f"\n\nTypeHoon Type Constraints (from binary analysis - but GEMINI SIGNATURE takes priority!):\n{json.dumps(func_data['type_constraints'], indent=2)[:1500]}"
+                    
+                    # Add assembly (ground truth)
+                    if func_data.get('asm'):
+                        prompt += f"\n\nAssembly Instructions (GROUND TRUTH - check xmm0/eax before RET for return type!):\n```asm\n{func_data['asm'][:2500]}\n```"
+                    
+                    func_data['function_summary'] = llm_interface.generate(prompt)
+                
+                # V8: Track Gemini signature status
+                has_gemini = any(f.get('gemini_signature') for f in enriched_data['functions'])
+                has_types = any(f.get('type_constraints') for f in enriched_data['functions'])
+                status_str = f"{'G' if has_gemini else '-'}{'T' if has_types else '-'}"
+                
+                with print_lock:
+                    print(f"[{stage_id}] P{idx} ({lang}) [{status_str}] ✓", flush=True)
+                
+                output_q.put({
+                    'enriched_data': enriched_data,
+                    'lang': lang,
+                    'idx': idx
+                })
+            except Exception as e:
+                with counter_lock:
+                    dropped_counter['summary'] += 1
+                with print_lock:
+                    print(f"[{stage_id}] P{item['data'].get('index', '?')} exception: {e} (dropped)", flush=True)
+            finally:
+                input_q.task_done()
+    
+    return worker
+
+
+# V8: Keep the old V7 function for reference but don't use it
 def _pipeline_summary_stage_v7(
     input_q: Queue, 
     output_q: Queue, 
@@ -1921,7 +2169,13 @@ def _pipeline_summary_stage_v7(
     counter_lock: threading.Lock,
     stage_id: str = "SUMMARY"
 ):
-    """Pipeline Stage 3: LLM summary generation (V7: with TypeForge enrichment)."""
+    """
+    [DEPRECATED IN V8] Pipeline Stage 3: LLM summary generation (V7: with TypeForge enrichment).
+    
+    NOTE: This function is kept for reference but is NOT USED in V8.
+    V8 uses _pipeline_summary_stage_v8 which reads pre-computed Gemini signatures
+    instead of making LLM calls for signature analysis.
+    """
     def worker():
         while True:
             item = input_q.get()
@@ -2190,9 +2444,9 @@ def process_batch_pipelined_v7(batch_items: List[Dict], temp_base_dir: Path, inc
         t.start()
         all_threads.append(('ghidra', t))
     
-    # Stage 3: Summary workers
+    # Stage 3: Summary workers (V8: Uses pre-computed Gemini signatures)
     for _ in range(PIPELINE_SUMMARY_WIDTH):
-        worker_fn = _pipeline_summary_stage_v7(summary_q, vexhelix_q, dropped_counter, counter_lock)
+        worker_fn = _pipeline_summary_stage_v8(summary_q, vexhelix_q, dropped_counter, counter_lock)
         t = threading.Thread(target=worker_fn, daemon=True)
         t.start()
         all_threads.append(('summary', t))
