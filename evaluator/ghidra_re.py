@@ -73,56 +73,45 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
   with open(output_file, "r") as out_f:
     output = json.load(out_f)
     
-  for data in output:
+  for data in corpus:
     log = {}
-    if data.get('index') is None:
-      continue
     corpus_index = data["index"]
     optimized_code = ""
-    ghidra_code = ""
+    ghidra_code = data["ghidra_pseudo"]
     c_include = ""
-    for function in data["functions"]:
-      if function["f_name"] == "func0":
-        optimized_code = function["optimized_code"]
-        ghidra_code = function["ghidra_code"]
-        break
     test_code = data["test"]
     c_include += data["func_dep"] + "\n"
-    
-    # populate LOG
-    log["index"] = corpus_index
-    log["original_code"] = data["original_code"]
-    log["optimized_code"] = optimized_code
-    log["ghidra_code"] = ghidra_code
-    log["test_code"] = test_code
     
        
     
     # get the includes from data["optimized_func"] and data["test"]
-    opt = [ d for d in corpus if d["index"] == corpus_index][0]["opt"]
+    opt = data["opt"]
     stats.setdefault(opt, {"total":0, "compilation_failures":0, "execution_failures":0, "successful_executions":0})
     c_stats.setdefault(opt, {"total":0, "compilation_failures":0, "execution_failures":0, "successful_executions":0})
     cpp_stats.setdefault(opt, {"total":0, "compilation_failures":0, "execution_failures":0, "successful_executions":0})
     print(f"Processing index: {corpus_index}")
     c_optimized = optimized_code
     c_test = test_code
-    if optimized_code != "":
-      stats[opt]["total"] += 1
-      if data["language"] == "c":
-        c_stats[opt]["total"] += 1
-      else:
-        cpp_stats[opt]["total"] += 1
-      
-    for line in optimized_code.splitlines():
-      if "include" in line:
-        c_include += line + "\n"
-        c_optimized = c_optimized.replace(line,"")
+    
+    stats[opt]["total"] += 1
+    if data["language"] == "c":
+      c_stats[opt]["total"] += 1
+    else:
+      cpp_stats[opt]["total"] += 1
+    
+    includes = ""
+    # get includes in test code
     for line in test_code.splitlines():
       if "include" in line:
-        c_include += line + "\n"
+        includes += line + "\n"
         c_test = c_test.replace(line,"")
+    # get includes in ghidra code
+    for line in ghidra_code.splitlines():
+      if "include" in line:
+        includes += line + "\n"
+        ghidra_code = ghidra_code.replace(line,"")
         
-    original_c_code = c_include + "\n" + c_optimized + "\n" + c_test
+    original_c_code = includes + data["ghidra_pseudo"] + "\n" + c_test
     #print(f"ORIGINAL C CODE : {original_c_code}")
     language = data["language"]
     
@@ -245,8 +234,7 @@ def main():
   """
   
   corpus_file = corpus_path / "humaneval-decompile.json"
-  #output_file = output_path / "batched_enriched_humaneval_decompile_v7.json"
-  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v0-SinglePrompt/VERITAS/output/humaneval-decompile/gptoss_final_batched_enriched_humaneval_decompile.json"
+  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v0-SinglePrompt/VERITAS/output/humaneval-decompile/v0_120b_batched_enriched_humaneval_decompile.json"
   stats = process_json_file(corpus_file, output_file)
         
 

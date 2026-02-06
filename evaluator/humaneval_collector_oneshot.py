@@ -24,10 +24,17 @@ c = Compiler()
 g = Ghidra()
 d = Disassembler()
 
+'''
 llm_interface = create_llm_interface(
     provider=config["llm"]["vllm_provider"],
     model_name=config["llm"]["vllm_model_name"],
     base_url=config["llm"]["vllm_base_url"]
+)
+'''
+llm_interface = create_llm_interface(
+    provider=config["llm"]["gemini_provider"],
+    model_name=config["llm"]["gemini_model_name"],
+    api_key=config["llm"]["gemini_api_key"]
 )
 
 corpus_path = Path(config["humaneval"]["corpus_path"])
@@ -54,24 +61,10 @@ def split_enrichment(data: Dict,executable_path: Path):
     
     executable_name = executable_path.stem
     
-    # -- Acquire SOG and Call Graph
-    output_dir = create_cfg_output_dir(executable_name)
-    cfg_map = g.extract_cfg(executable_path, output_dir)
-    callgraph_map = g.extract_call_graph(executable_path, output_dir)
-    filtered_functions = cfg_map.keys()
-    
-    # -- Topologically Sort Call Graph
-    callgraph = build_call_graph(callgraph_map.get('call_graph'))
-    sorted_functions = topological_sort(callgraph)
-    
-    # add func0 if not present
-    if len(sorted_functions) == 0:
-        sorted_functions.append("func0")
-        
-    program_data['callgraph'] = callgraph
     
     # -- For each function in topological order, enrich its SOG using LLM
     functions = []
+    sorted_functions = ["func0"]
     for function_name in sorted_functions:
         
         if function_name != "func0":
@@ -82,36 +75,20 @@ def split_enrichment(data: Dict,executable_path: Path):
         f_data['asm'] = data['asm']
         f_data['ghidra_code'] = data['ghidra_pseudo']
         
-        # parse the CFG DOT file to get the SOG
-        sog_path = cfg_map.get(function_name)
-        with open(sog_path, 'r') as f:
-            sog_dot = f.read()
-        #f_data['sog_dot'] = json.loads(sog_dot)
-        
-        # Get Caller and Callee Context
-        callers = [caller for caller, callees in callgraph.items() if function_name in callees]
-        callees = callgraph.get(function_name, [])
-        f_data['callers'] = callers
-        f_data['callees'] = callees
         
         # LLM Guided Enrichment for Summary and Optimized Code
         print(f"Optimizing Function:{function_name}")
-        f_data['function_summary'] = gen_code_summary(
-            asm=f_data['asm'],
-            ghidra=f_data['ghidra_code'] 
-        )
+
         
-        caller_callee_summary = gen_context_summary(callgraph)
-        print(f"Caller and Callee Summary:\n{caller_callee_summary}")
     
         f_data['optimization_status'], f_data['optimized_code'] = get_optimized_code(
             c_code=f_data['ghidra_code'],
-            function_summary=f_data['function_summary'],
-            caller_and_callee_summary=caller_callee_summary,
+            function_summary="",
+            caller_and_callee_summary="",
             function_sog="",
             language=data['language'],
             llm_interface=llm_interface,
-            max_iterations=3,
+            max_iterations=0,
             c_flag=True
         )
         
@@ -120,28 +97,6 @@ def split_enrichment(data: Dict,executable_path: Path):
     program_data['functions'] = functions
         
     return program_data
-
-
-def gen_context_summary(callgraph: Dict[str, List[str]]) -> str:
-    prompt = ""
-    for function, callees in callgraph.items():
-        if function == "func0":
-            prompt += f"{function} calls {', '.join(callees) if callees else 'no functions'}\n"
-    return prompt
-
-
-def gen_code_summary(asm: str, ghidra: str) -> str:
-    summary_prompt = config["prompts"]["summary_prompt"]
-    prompt = f"{summary_prompt}"
-    if ghidra:
-        prompt += f"\n\nGhidra Code:\n```c\n{ghidra}\n```"
-    if asm:
-        prompt += f"\n\nAssembly Instructions:\n{asm}"
-
-    # Call the LLM API to generate a summary
-    response = llm_interface.generate(prompt)
-    return response
-
 
 
 
@@ -174,13 +129,15 @@ def process_humaneval_decompile(json_path: Path) -> List[Dict]:
     '''
     Process the humaneval decompile json file and enrich each function's data.
     '''
-    output_file_path = output_dir / "v0_gemini_humaneval_decompile.json"
+    output_file_path = output_dir / "v0_actual_gemini_humaneval_decompile.json"
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(json_path, "r") as f:
         humaneval_data = json.load(f)
     
     for item in humaneval_data:
+        if item['index'] <= 612:
+            continue
         print(f"Processing function index: {item['index']}")
         enriched_data = single_function_optimizer(item)
         # append to json file
