@@ -158,27 +158,6 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
           cpp_stats[opt]["execution_failures"] += 1
         print("Error : ", runtime_message)
         
-    '''
-    if not compiled or not executed:
-      log["runtime_message"] = runtime_message
-      prompt = config["prompts"]["analysis_prompt"] + "\n\n" + str(log)
-      error_analysis = json.loads(llm_interface.generate(prompt))
-      error_analysis["original_code"] = data["original_code"]
-      error_analysis["optimized_code"] = optimized_code
-      
-      # append to json file
-      analysis_path = output_path / "analysis_logs.json"
-      
-      if analysis_path.exists():
-        with open(analysis_path, "r") as f:
-          existing_data = json.load(f)
-        existing_data.append(error_analysis)
-        with open(analysis_path, "w") as f:
-          json.dump(existing_data, f, indent=4)
-      else:
-        with open(analysis_path, "w") as f:
-          json.dump([error_analysis], f, indent=4)
-    '''
 
         
     # print rates for every optimization level
@@ -248,8 +227,7 @@ def main():
   """
   
   corpus_file = corpus_path / "mbpp-decompile.json"
-  #output_file = output_path / "batched_enriched_mbpp_decompile_v7.json"
-  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/VERITAS/output/mbpp/v8_120b_batched_results.json"
+  output_file = output_path / "batched_enriched_mbpp_decompile_v7.json"
   stats = process_json_file(corpus_file, output_file)
         
 

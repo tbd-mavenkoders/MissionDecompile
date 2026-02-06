@@ -21,8 +21,8 @@ print(f"Loading config from: {CONFIG_PATH}")
 with open(CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
-corpus_path = Path(config["mbpp"]["corpus_path"])
-output_path = Path(config["mbpp"]["output_path"])
+corpus_path = Path(config["humaneval"]["corpus_path"])
+output_path = Path(config["humaneval"]["output_path"])
 
 llm_interface = create_llm_interface(
   provider=config["llm"]["vllm_provider"],
@@ -30,7 +30,7 @@ llm_interface = create_llm_interface(
   base_url=config["llm"]["vllm_base_url"]
 )
 
-def compile(c_file_path: str, language: str) -> Tuple[bool, bool, str]:
+def compile_and_execute(c_file_path: str, language: str) -> Tuple[bool, bool, str]:
   """
   Compile and execute the C code, returning any runtime errors.
   """
@@ -40,14 +40,23 @@ def compile(c_file_path: str, language: str) -> Tuple[bool, bool, str]:
     output_file_path = output_executable,
     opt = OptimizationLevel.O0,
     is_cpp = (language == "cpp"),
-    c_flag = True,
+    c_flag = False,
     extra_flags = ["-lm"]
   )
   # if fails to compile, return error
   if not status:
     return False, False, compile_message
-  else:
-    return True, True, "Compiled Successfully"
+  # if compiles, run and capture output by running ./output_executable
+  try:
+    command = [f"./{output_executable.name}"]
+    print("Executing command:", " ".join(command))
+    res = subprocess.run(command, cwd = output_executable.parent, capture_output=True, text=True, timeout=5)
+    if res.returncode == 0:
+      return True, True, res.stdout
+    else:
+      return True, False, res.stderr
+  except Exception as e:
+    return True, False, str(e)
   
 
 
@@ -114,8 +123,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
     if data["language"] == "cpp":
       c_include += "using namespace std;\n"
         
-    #original_c_code = c_include + "\n" + c_optimized + "\n" + c_test
-    original_c_code = data['func_dep'] + "\n" + data['original_code']
+    original_c_code = c_include + "\n" + c_optimized + "\n" + c_test
     #print(f"ORIGINAL C CODE : {original_c_code}")
     language = data["language"]
     
@@ -126,7 +134,7 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
         f.write(original_c_code)
             
       # attempt to compile and execute the original code
-      compiled, executed, runtime_message = compile(c_file_path, language)
+      compiled, executed, runtime_message = compile_and_execute(c_file_path, language)
       if not compiled:
         print("Compilation Error : ", runtime_message)
         stats[opt]["compilation_failures"] += 1
@@ -148,27 +156,6 @@ def process_json_file(corpus_file: Path, output_file: Path) -> Dict:
           cpp_stats[opt]["execution_failures"] += 1
         print("Error : ", runtime_message)
         
-    '''
-    if not compiled or not executed:
-      log["runtime_message"] = runtime_message
-      prompt = config["prompts"]["analysis_prompt"] + "\n\n" + str(log)
-      error_analysis = json.loads(llm_interface.generate(prompt))
-      error_analysis["original_code"] = data["original_code"]
-      error_analysis["optimized_code"] = optimized_code
-      
-      # append to json file
-      analysis_path = output_path / "analysis_logs.json"
-      
-      if analysis_path.exists():
-        with open(analysis_path, "r") as f:
-          existing_data = json.load(f)
-        existing_data.append(error_analysis)
-        with open(analysis_path, "w") as f:
-          json.dump(existing_data, f, indent=4)
-      else:
-        with open(analysis_path, "w") as f:
-          json.dump([error_analysis], f, indent=4)
-    '''
 
         
     # print rates for every optimization level
@@ -237,9 +224,8 @@ def main():
   Main function to process all JSON files in the corpus root directory.
   """
   
-  corpus_file = corpus_path / "mbpp-decompile.json"
-  #output_file = output_path / "batched_enriched_mbpp_decompile_v7.json"
-  output_file = "/workspace/home/b220032cs/fyp/repos/ansaf/Experiments/v8-GemTypesandVEX/VERITAS/output/mbpp/v8_120b_batched_results.json"
+  corpus_file = corpus_path / "humaneval-decompile.json"
+  output_file = output_path / "batched_enriched_humaneval_decompile_v7.json"
   stats = process_json_file(corpus_file, output_file)
         
 
