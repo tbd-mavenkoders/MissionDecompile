@@ -9,7 +9,7 @@ This is a standalone demo that processes a single executable binary through the 
 3. **Type Signature Analysis** - Gemini 2.5 Pro LLM-based type signature inference
 4. **LLM Decompilation** - Generate source code from pseudocode
 5. **Static Repair** - Fix compilation errors iteratively
-6. **Semantic Verification** - VexHelix symbolic execution equivalence checking
+6. **Semantic Verification** - VexSym symbolic execution equivalence checking
 7. **Semantic Repair** - Fix semantic divergences using counterexamples
 
 ## Requirements
@@ -17,7 +17,7 @@ This is a standalone demo that processes a single executable binary through the 
 - Python 3.8+
 - Ghidra (configured in VERITAS config.yaml)
 - Google Gemini API key
-- VexHelix API running (optional, for semantic verification)
+- VexSym API running (optional, for semantic verification)
 
 ### Python Dependencies
 
@@ -47,7 +47,7 @@ python veritas.py \
     --function_name func0 \
     --opt O0 \
     --output_dir ./output \
-    --vexhelix_url http://127.0.0.1:8001 \
+    --VexSym_url http://127.0.0.1:8001 \
     --num_args 3
 ```
 
@@ -63,7 +63,7 @@ python veritas.py \
 | `--function_name` | No | `func0` | Function to decompile |
 | `--opt` | No | `O0` | Optimization level (O0-O3) |
 | `--output_dir` | No | `./output` | Output directory |
-| `--vexhelix_url` | No | `http://127.0.0.1:8001` | VexHelix API URL |
+| `--VexSym_url` | No | `http://127.0.0.1:8001` | VexSym API URL |
 | `--num_args` | No | `3` | Number of function arguments |
 
 ## Output
@@ -102,7 +102,7 @@ demo/
 
 ## Notes
 
-- If VexHelix is unavailable, the demo will still produce compiled code but without semantic verification
+- If VexSym is unavailable, the demo will still produce compiled code but without semantic verification
 - TypeForge requires Ghidra with the TypeForge.java postscript installed
 - Typehoon requires angr (pip install angr)
 - The demo reuses components from the main VERITAS pipeline in the parent directory
